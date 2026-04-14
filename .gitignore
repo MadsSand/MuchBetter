@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+.venv/
+venv/
+
+# Env vars (MEGET vigtigt)
+.env
+
+# VS Code (valgfrit)
+.vscode/
+
+# OS
+.DS_Store
