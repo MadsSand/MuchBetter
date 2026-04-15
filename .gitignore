@@ -17,4 +17,6 @@ venv/
 
 *.exe
 cloudflared*
-.env
+
+# Local scripts
+*.bat
