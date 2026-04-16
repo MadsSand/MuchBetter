@@ -1,20 +1,147 @@
-from flask import Flask, render_template_string, request, redirect
+from flask import Flask, render_template_string, request, redirect, session, url_for
 import psycopg
 import os
+from functools import wraps
+from pathlib import Path
 
 app = Flask(__name__)
 
 from dotenv import load_dotenv
-load_dotenv()
-
-from pathlib import Path
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 DB_URL = os.getenv("DATABASE_URL")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 if not DB_URL:
     raise ValueError("DATABASE_URL is not set")
 
+if not ADMIN_PASSWORD:
+    raise ValueError("ADMIN_PASSWORD is not set")
+
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY is not set")
+
+app.config["SECRET_KEY"] = SECRET_KEY
+
+def admin_required(view_func):
+    @wraps(view_func)
+    def wrapped_view(*args, **kwargs):
+        if not session.get("is_admin"):
+            return redirect(url_for("login"))
+        return view_func(*args, **kwargs)
+    return wrapped_view
+@app.route("/login", methods=["GET", "POST"])
+
+def login():
+    error = None
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+
+        if password == ADMIN_PASSWORD:
+            session["is_admin"] = True
+            next_url = request.args.get("next") or "/"
+            return redirect(next_url)
+        else:
+            error = "Forkert kode"
+
+    html = """
+    <!doctype html>
+    <html lang="da">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Login</title>
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 16px;
+                background: #f5f5f5;
+                color: #111;
+            }
+
+            .container {
+                max-width: 420px;
+                margin: 60px auto;
+            }
+
+            .card {
+                background: white;
+                border-radius: 14px;
+                padding: 20px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            }
+
+            h1 {
+                margin-top: 0;
+            }
+
+            label {
+                display: block;
+                font-weight: 600;
+                margin-bottom: 6px;
+            }
+
+            input[type="password"] {
+                width: 100%;
+                padding: 12px;
+                border-radius: 10px;
+                border: 1px solid #ccc;
+                font-size: 16px;
+                margin-bottom: 14px;
+            }
+
+            button {
+                width: 100%;
+                padding: 14px;
+                background: #111;
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-weight: bold;
+                font-size: 16px;
+                cursor: pointer;
+            }
+
+            .error {
+                color: #b00020;
+                margin-bottom: 12px;
+                font-size: 14px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="card">
+                <h1>Admin login</h1>
+
+                {% if error %}
+                    <div class="error">{{ error }}</div>
+                {% endif %}
+
+                <form method="post">
+                    <label for="password">Kode</label>
+                    <input type="password" id="password" name="password" required>
+                    <button type="submit">Log ind</button>
+                </form>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    return render_template_string(html, error=error)
+
+@app.get("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
 
 @app.get("/")
 def home():
@@ -160,6 +287,7 @@ def home():
                 <a href="/">Ny runde</a>
                 <a href="/rounds">Runder</a>
                 <a href="/stats">Statistik</a>
+                <a href="/logout">Log ud</a>
             </div>
 
             <h1>Ny runde</h1>
@@ -218,6 +346,7 @@ def home():
     return render_template_string(html, courses=courses, players=players)
 
 @app.post("/save")
+@admin_required
 def save_round():
     round_date = request.form.get("round_date")
     course_id = int(request.form.get("course_id"))
@@ -329,6 +458,7 @@ def list_rounds():
                 <a href="/">Ny runde</a>
                 <a href="/rounds">Runder</a>
                 <a href="/stats">Statistik</a>
+                <a href="/logout">Log ud</a>
             </div>
 
             <h1>Runder</h1>
@@ -515,6 +645,7 @@ def show_round(round_id):
                 <a href="/">Ny runde</a>
                 <a href="/rounds">Runder</a>
                 <a href="/stats">Statistik</a>
+                <a href="/logout">Log ud</a>
             </div>
 
             <h1>Resultater</h1>
@@ -605,6 +736,7 @@ def show_round(round_id):
     )
 
 @app.get("/round/<int:round_id>/edit")
+@admin_required
 def edit_round(round_id):
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
@@ -761,6 +893,7 @@ def edit_round(round_id):
                 <a href="/">Ny runde</a>
                 <a href="/rounds">Runder</a>
                 <a href="/stats">Statistik</a>
+                <a href="/logout">Log ud</a>
             </div>
 
             <h1>Ret runde</h1>
@@ -1010,6 +1143,7 @@ def upsert_round_players(cur, round_id, form_data):
             )
 
 @app.post("/round/<int:round_id>/edit")
+@admin_required
 def update_round(round_id):
     round_date = request.form.get("round_date")
     course_id = int(request.form.get("course_id"))
@@ -1038,6 +1172,7 @@ def update_round(round_id):
     return redirect(f"/round/{round_id}")
 
 @app.post("/round/<int:round_id>/delete")
+@admin_required
 def delete_round(round_id):
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
@@ -1168,6 +1303,7 @@ def stats():
                 <a href="/">Ny Runde</a>
                 <a href="/rounds">Runder</a>
                 <a href="/stats">Statistik</a>
+                <a href="/logout">Log ud</a>
             </div>
 
             <h1>Statistik</h1>
@@ -1215,4 +1351,4 @@ def stats():
     return render_template_string(html, player_stats=player_stats)
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)
