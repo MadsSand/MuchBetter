@@ -1544,6 +1544,15 @@ def edit_round(round_id):
 def recalculate_round(cur, round_id):
     cur.execute(
         """
+        update round_players
+        set position = null
+        where round_id = %s;
+        """,
+        (round_id,)
+    )
+
+    cur.execute(
+        """
         with ranked as (
             select
                 id,
@@ -1564,18 +1573,11 @@ def recalculate_round(cur, round_id):
 
     cur.execute(
         """
-        with point_table(pos, pts) as (
-            values
-                (1, 12.0::numeric),
-                (2, 9.0::numeric),
-                (3, 8.0::numeric),
-                (4, 7.0::numeric),
-                (5, 6.0::numeric),
-                (6, 5.0::numeric),
-                (7, 4.0::numeric),
-                (8, 3.0::numeric),
-                (9, 2.0::numeric),
-                (10, 1.0::numeric)
+        with played_count as (
+            select count(*)::numeric as n
+            from round_players
+            where round_id = %s
+              and status = 'played'
         ),
         tie_groups as (
             select
@@ -1587,24 +1589,44 @@ def recalculate_round(cur, round_id):
               and position is not null
             group by position
         ),
-        tie_points as (
+        expanded_positions as (
             select
                 tg.position,
                 tg.tie_count,
-                coalesce(avg(pt.pts), 0) as avg_points
+                gs.pos as occupied_pos
             from tie_groups tg
-            left join point_table pt
-                on pt.pos between tg.position and tg.position + tg.tie_count - 1
-            group by tg.position, tg.tie_count
+            cross join lateral generate_series(
+                tg.position,
+                tg.position + tg.tie_count - 1
+            ) as gs(pos)
+        ),
+        point_values as (
+            select
+                ep.position,
+                round(
+                    avg(
+                        (2 * (pc.n - ep.occupied_pos)) +
+                        case
+                            when ep.occupied_pos = 1 then 4
+                            when ep.occupied_pos = 2 then 2
+                            when ep.occupied_pos = 3 then 1
+                            else 0
+                        end
+                    ),
+                    2
+                ) as avg_points
+            from expanded_positions ep
+            cross join played_count pc
+            group by ep.position
         )
         update round_players rp
-        set season_points = tp.avg_points
-        from tie_points tp
+        set season_points = pv.avg_points
+        from point_values pv
         where rp.round_id = %s
           and rp.status = 'played'
-          and rp.position = tp.position;
+          and rp.position = pv.position;
         """,
-        (round_id, round_id)
+        (round_id, round_id, round_id)
     )
 
     cur.execute(
