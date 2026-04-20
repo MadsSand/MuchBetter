@@ -2144,6 +2144,27 @@ def stats():
                 </div>
             </div>
 
+            <div class="card">
+                <h2>Pointsystem</h2>
+
+                <div class="muted" style="line-height: 1.6;">
+                    <b>Sådan beregnes point:</b><br><br>
+
+                    • Du får <b>2 point pr. spiller du vinder over på dagen</b><br>
+                    • <b>Bonus til top 3:</b><br>
+                    &nbsp;&nbsp;&nbsp;1. plads: +4 point<br>
+                    &nbsp;&nbsp;&nbsp;2. plads: +2 point<br>
+                    &nbsp;&nbsp;&nbsp;3. plads: +1 point<br><br>
+
+                    • Sidsteplads giver 0 point<br>
+                    • Ved uafgjort deles point for de placeringer man optager<br><br>
+
+                    <span style="font-size: 13px;">
+                        Eksempel: 8 spillere → vinder får 2×7 pr. spiller man har vundet over + 4 bonus = 18 point
+                    </span>
+                </div>
+            </div>
+
         </div>
     </body>
     </html>
