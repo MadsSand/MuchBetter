@@ -164,39 +164,171 @@ def home():
             latest_round = cur.fetchone()
 
             cur.execute("""
+                with latest_round_cte as (
+                    select id, round_date, season_year
+                    from rounds
+                    order by round_date desc, id desc
+                    limit 1
+                ),
+                current_totals as (
+                    select
+                        p.id as player_id,
+                        p.full_name,
+                        coalesce(sum(rp.season_points), 0) as total_points
+                    from players p
+                    left join round_players rp
+                        on rp.player_id = p.id
+                    left join rounds r
+                        on r.id = rp.round_id
+                    cross join latest_round_cte lr
+                    where p.is_active = true
+                    and (r.season_year = lr.season_year or r.id is null)
+                    group by p.id, p.full_name
+                ),
+                previous_totals as (
+                    select
+                        p.id as player_id,
+                        p.full_name,
+                        coalesce(sum(rp.season_points), 0) as total_points
+                    from players p
+                    left join round_players rp
+                        on rp.player_id = p.id
+                    left join rounds r
+                        on r.id = rp.round_id
+                    cross join latest_round_cte lr
+                    where p.is_active = true
+                    and (
+                            (
+                                r.season_year = lr.season_year
+                                and (
+                                    r.round_date < lr.round_date
+                                    or (r.round_date = lr.round_date and r.id < lr.id)
+                                )
+                            )
+                            or r.id is null
+                    )
+                    group by p.id, p.full_name
+                ),
+                ranked_current as (
+                    select
+                        player_id,
+                        full_name,
+                        total_points,
+                        rank() over (order by total_points desc, full_name) as current_rank
+                    from current_totals
+                ),
+                ranked_previous as (
+                    select
+                        player_id,
+                        total_points,
+                        rank() over (order by total_points desc, full_name) as previous_rank
+                    from previous_totals
+                )
                 select
-                    p.full_name,
-                    coalesce(sum(rp.season_points), 0) as total_points
-                from players p
-                left join round_players rp
-                    on rp.player_id = p.id
-                left join rounds r
-                    on r.id = rp.round_id
-                    and r.season_year = %s
-                where p.is_active = true
-                  and (r.id is not null or rp.id is null)
-                group by p.id, p.full_name
-                order by total_points desc, p.full_name
+                    rc.full_name,
+                    rc.total_points,
+                    rc.current_rank,
+                    rp.previous_rank,
+                    case
+                        when rp.previous_rank is null then 'new'
+                        when rp.previous_rank > rc.current_rank then 'up'
+                        when rp.previous_rank < rc.current_rank then 'down'
+                        else 'same'
+                    end as movement,
+                    case
+                        when rp.previous_rank is null then null
+                        else abs(rp.previous_rank - rc.current_rank)
+                    end as movement_by
+                from ranked_current rc
+                left join ranked_previous rp
+                    on rp.player_id = rc.player_id
+                order by rc.current_rank
                 limit 3;
-            """, (current_year,))
+            """)
             top_points = cur.fetchall()
 
             cur.execute("""
+                with latest_round_cte as (
+                    select id, round_date, season_year
+                    from rounds
+                    order by round_date desc, id desc
+                    limit 1
+                ),
+                current_totals as (
+                    select
+                        p.id as player_id,
+                        p.full_name,
+                        coalesce(sum(rp.money_rank), 0) as total_money
+                    from players p
+                    left join round_players rp
+                        on rp.player_id = p.id
+                    left join rounds r
+                        on r.id = rp.round_id
+                    cross join latest_round_cte lr
+                    where p.is_active = true
+                    and (r.season_year = lr.season_year or r.id is null)
+                    group by p.id, p.full_name
+                ),
+                previous_totals as (
+                    select
+                        p.id as player_id,
+                        p.full_name,
+                        coalesce(sum(rp.money_rank), 0) as total_money
+                    from players p
+                    left join round_players rp
+                        on rp.player_id = p.id
+                    left join rounds r
+                        on r.id = rp.round_id
+                    cross join latest_round_cte lr
+                    where p.is_active = true
+                    and (
+                            (
+                                r.season_year = lr.season_year
+                                and (
+                                    r.round_date < lr.round_date
+                                    or (r.round_date = lr.round_date and r.id < lr.id)
+                                )
+                            )
+                            or r.id is null
+                    )
+                    group by p.id, p.full_name
+                ),
+                ranked_current as (
+                    select
+                        player_id,
+                        full_name,
+                        total_money,
+                        rank() over (order by total_money desc, full_name) as current_rank
+                    from current_totals
+                ),
+                ranked_previous as (
+                    select
+                        player_id,
+                        total_money,
+                        rank() over (order by total_money desc, full_name) as previous_rank
+                    from previous_totals
+                )
                 select
-                    p.full_name,
-                    coalesce(sum(rp.money_rank), 0) as total_money
-                from players p
-                left join round_players rp
-                    on rp.player_id = p.id
-                left join rounds r
-                    on r.id = rp.round_id
-                    and r.season_year = %s
-                where p.is_active = true
-                  and (r.id is not null or rp.id is null)
-                group by p.id, p.full_name
-                order by total_money desc, p.full_name
+                    rc.full_name,
+                    rc.total_money,
+                    rc.current_rank,
+                    rp.previous_rank,
+                    case
+                        when rp.previous_rank is null then 'new'
+                        when rp.previous_rank > rc.current_rank then 'up'
+                        when rp.previous_rank < rc.current_rank then 'down'
+                        else 'same'
+                    end as movement,
+                    case
+                        when rp.previous_rank is null then null
+                        else abs(rp.previous_rank - rc.current_rank)
+                    end as movement_by
+                from ranked_current rc
+                left join ranked_previous rp
+                    on rp.player_id = rc.player_id
+                order by rc.current_rank
                 limit 3;
-            """, (current_year,))
+            """)
             top_money = cur.fetchall()
 
             cur.execute("""
@@ -372,6 +504,41 @@ def home():
                 color: #444;
             }
 
+            .movement {
+                font-size: 13px;
+                font-weight: 700;
+                padding: 4px 8px;
+                border-radius: 999px;
+                display: inline-block;
+            }
+
+            .movement.up {
+                background: #e8f7ed;
+                color: #1f7a3e;
+            }
+
+            .movement.down {
+                background: #fdecec;
+                color: #b42318;
+            }
+
+            .movement.same {
+                background: #f2f4f7;
+                color: #667085;
+            }
+
+            .movement.new {
+                background: #eef4ff;
+                color: #175cd3;
+            }
+
+            .value-wrap {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
             @media (max-width: 700px) {
                 .grid {
                     grid-template-columns: 1fr;
@@ -395,7 +562,7 @@ def home():
             </div>
 
             <div class="hero">
-                <h1>Golf Liga</h1>
+                <h1>MuchBetter Golf Liga</h1>
                 <p>Overblik over runder, statistik og stilling.</p>
 
                 <div class="hero-actions">
@@ -435,8 +602,20 @@ def home():
                         <div class="list">
                             {% for p in top_points %}
                                 <div class="list-row">
-                                    <div>{{ loop.index }}. {{ p[0] }}</div>
-                                    <div>{{ p[1] }} point</div>
+                                    <div>{{ p[2] }}. {{ p[0] }}</div>
+                                    <div class="value-wrap">
+                                        <div>{{ p[1] }} point</div>
+
+                                        {% if p[4] == "up" %}
+                                            <span class="movement up">▲ {{ p[5] }}</span>
+                                        {% elif p[4] == "down" %}
+                                            <span class="movement down">▼ {{ p[5] }}</span>
+                                        {% elif p[4] == "new" %}
+                                            <span class="movement new">Ny</span>
+                                        {% else %}
+                                            <span class="movement same">–</span>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             {% endfor %}
                         </div>
@@ -452,8 +631,20 @@ def home():
                         <div class="list">
                             {% for p in top_money %}
                                 <div class="list-row">
-                                    <div>{{ loop.index }}. {{ p[0] }}</div>
-                                    <div>{{ p[1] }} kr</div>
+                                    <div>{{ p[2] }}. {{ p[0] }}</div>
+                                    <div class="value-wrap">
+                                        <div>{{ p[1] }} kr</div>
+
+                                        {% if p[4] == "up" %}
+                                            <span class="movement up">▲ {{ p[5] }}</span>
+                                        {% elif p[4] == "down" %}
+                                            <span class="movement down">▼ {{ p[5] }}</span>
+                                        {% elif p[4] == "new" %}
+                                            <span class="movement new">Ny</span>
+                                        {% else %}
+                                            <span class="movement same">–</span>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             {% endfor %}
                         </div>
@@ -1572,7 +1763,7 @@ def stats():
     direction = request.args.get("direction", "desc")
 
     allowed_sorts = {
-        "name": "p.full_name",
+        "name": "full_name",
         "rounds_played": "rounds_played",
         "avg_stableford": "avg_stableford",
         "best_stableford": "best_stableford",
@@ -1588,6 +1779,60 @@ def stats():
     order_direction = direction if direction in allowed_directions else "desc"
 
     query = f"""
+        with latest_round_cte as (
+            select id, round_date, season_year
+            from rounds
+            order by round_date desc, id desc
+            limit 1
+        ),
+        current_totals as (
+            select
+                p.id as player_id,
+                coalesce(sum(case when r.season_year = lr.season_year then rp.season_points else 0 end), 0) as total_points,
+                coalesce(sum(case when r.season_year = lr.season_year then rp.money_rank else 0 end), 0) as total_money
+            from players p
+            left join round_players rp
+                on rp.player_id = p.id
+            left join rounds r
+                on r.id = rp.round_id
+            cross join latest_round_cte lr
+            where p.is_active = true
+            group by p.id
+        ),
+        previous_totals as (
+            select
+                p.id as player_id,
+                coalesce(sum(
+                    case
+                        when r.season_year = lr.season_year
+                         and (
+                              r.round_date < lr.round_date
+                              or (r.round_date = lr.round_date and r.id < lr.id)
+                         )
+                        then rp.season_points
+                        else 0
+                    end
+                ), 0) as prev_points,
+                coalesce(sum(
+                    case
+                        when r.season_year = lr.season_year
+                         and (
+                              r.round_date < lr.round_date
+                              or (r.round_date = lr.round_date and r.id < lr.id)
+                         )
+                        then rp.money_rank
+                        else 0
+                    end
+                ), 0) as prev_money
+            from players p
+            left join round_players rp
+                on rp.player_id = p.id
+            left join rounds r
+                on r.id = rp.round_id
+            cross join latest_round_cte lr
+            where p.is_active = true
+            group by p.id
+        )
         select
             p.full_name,
             count(*) filter (where rp.status = 'played') as rounds_played,
@@ -1599,12 +1844,24 @@ def stats():
                 and rp.position is not null
             ) as top3,
             coalesce(sum(rp.season_points), 0) as total_points,
-            coalesce(sum(rp.money_rank), 0) as total_money
+            coalesce(sum(rp.money_rank), 0) as total_money,
+            coalesce(ct.total_points, 0) - coalesce(pt.prev_points, 0) as points_change,
+            coalesce(ct.total_money, 0) - coalesce(pt.prev_money, 0) as money_change
         from players p
         left join round_players rp
             on rp.player_id = p.id
+        left join current_totals ct
+            on ct.player_id = p.id
+        left join previous_totals pt
+            on pt.player_id = p.id
         where p.is_active = true
-        group by p.id, p.full_name
+        group by
+            p.id,
+            p.full_name,
+            ct.total_points,
+            ct.total_money,
+            pt.prev_points,
+            pt.prev_money
         order by {order_by} {order_direction} nulls last, p.full_name;
     """
 
@@ -1634,7 +1891,7 @@ def stats():
             }
 
             .container {
-                max-width: 1000px;
+                max-width: 1100px;
                 margin: 0 auto;
             }
 
@@ -1645,6 +1902,8 @@ def stats():
                 padding: 12px;
                 border-radius: 12px;
                 margin-bottom: 16px;
+                gap: 8px;
+                flex-wrap: wrap;
             }
 
             .navbar a {
@@ -1652,6 +1911,13 @@ def stats():
                 text-decoration: none;
                 font-weight: 600;
                 font-size: 14px;
+                padding: 8px 10px;
+                border-radius: 8px;
+            }
+
+            .navbar a.active {
+                background: white;
+                color: #111;
             }
 
             .card {
@@ -1673,7 +1939,7 @@ def stats():
 
             table {
                 width: 100%;
-                min-width: 900px;
+                min-width: 1100px;
                 border-collapse: collapse;
                 background: white;
             }
@@ -1730,6 +1996,30 @@ def stats():
                 font-size: 16px;
                 cursor: pointer;
             }
+
+            .change {
+                font-weight: 700;
+                padding: 4px 8px;
+                border-radius: 999px;
+                display: inline-block;
+                min-width: 54px;
+                text-align: center;
+            }
+
+            .change.up {
+                background: #e8f7ed;
+                color: #1f7a3e;
+            }
+
+            .change.down {
+                background: #fdecec;
+                color: #b42318;
+            }
+
+            .change.same {
+                background: #f2f4f7;
+                color: #667085;
+            }
         </style>
     </head>
     <body>
@@ -1739,7 +2029,7 @@ def stats():
                 <a href="/">Forside</a>
                 <a href="/new">Ny runde</a>
                 <a href="/rounds">Runder</a>
-                <a href="/stats">Statistik</a>
+                <a href="/stats" class="active">Statistik</a>
                 <a href="/logout">Log ud</a>
             </div>
 
@@ -1792,7 +2082,9 @@ def stats():
                             <th>Sejre</th>
                             <th>Top 3</th>
                             <th>Total point</th>
+                            <th>Point siden sidst</th>
                             <th>Total money</th>
+                            <th>Money siden sidst</th>
                         </tr>
 
                         {% for r in player_stats %}
@@ -1805,7 +2097,25 @@ def stats():
                             <td>{{ r[4] }}</td>
                             <td>{{ r[5] }}</td>
                             <td>{{ r[6] if r[6] is not none else 0 }}</td>
+                            <td>
+                                {% if r[8] > 0 %}
+                                    <span class="change up">▲ {{ r[8] }}</span>
+                                {% elif r[8] < 0 %}
+                                    <span class="change down">▼ {{ -r[8] }}</span>
+                                {% else %}
+                                    <span class="change same">–</span>
+                                {% endif %}
+                            </td>
                             <td>{{ r[7] if r[7] is not none else 0 }}</td>
+                            <td>
+                                {% if r[9] > 0 %}
+                                    <span class="change up">▲ {{ r[9] }}</span>
+                                {% elif r[9] < 0 %}
+                                    <span class="change down">▼ {{ -r[9] }}</span>
+                                {% else %}
+                                    <span class="change same">–</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </table>
