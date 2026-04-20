@@ -3,6 +3,7 @@ import psycopg
 import os
 from functools import wraps
 from pathlib import Path
+from datetime import date
 
 app = Flask(__name__)
 
@@ -146,6 +147,346 @@ def logout():
 
 @app.get("/")
 def home():
+    current_year = date.today().year
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                select
+                    r.id,
+                    r.round_date,
+                    c.name
+                from rounds r
+                join courses c on c.id = r.course_id
+                order by r.round_date desc
+                limit 1;
+            """)
+            latest_round = cur.fetchone()
+
+            cur.execute("""
+                select
+                    p.full_name,
+                    coalesce(sum(rp.season_points), 0) as total_points
+                from players p
+                left join round_players rp
+                    on rp.player_id = p.id
+                left join rounds r
+                    on r.id = rp.round_id
+                    and r.season_year = %s
+                where p.is_active = true
+                  and (r.id is not null or rp.id is null)
+                group by p.id, p.full_name
+                order by total_points desc, p.full_name
+                limit 3;
+            """, (current_year,))
+            top_points = cur.fetchall()
+
+            cur.execute("""
+                select
+                    p.full_name,
+                    coalesce(sum(rp.money_rank), 0) as total_money
+                from players p
+                left join round_players rp
+                    on rp.player_id = p.id
+                left join rounds r
+                    on r.id = rp.round_id
+                    and r.season_year = %s
+                where p.is_active = true
+                  and (r.id is not null or rp.id is null)
+                group by p.id, p.full_name
+                order by total_money desc, p.full_name
+                limit 3;
+            """, (current_year,))
+            top_money = cur.fetchall()
+
+            cur.execute("""
+                select count(*)
+                from rounds;
+            """)
+            total_rounds = cur.fetchone()[0]
+
+    html = """
+    <!doctype html>
+    <html lang="da">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Golf Liga</title>
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 16px;
+                background: #f5f5f5;
+                color: #111;
+            }
+
+            .container {
+                max-width: 900px;
+                margin: 0 auto;
+            }
+
+            .navbar {
+                display: flex;
+                justify-content: space-around;
+                align-items: center;
+                background: #111;
+                padding: 12px;
+                border-radius: 12px;
+                margin-bottom: 20px;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            .navbar a {
+                color: white;
+                text-decoration: none;
+                font-weight: 600;
+                font-size: 14px;
+                padding: 8px 10px;
+                border-radius: 8px;
+            }
+
+            .navbar a.active {
+                background: white;
+                color: #111;
+            }
+
+            .hero {
+                background: white;
+                border-radius: 18px;
+                padding: 24px;
+                margin-bottom: 16px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            }
+
+            .hero h1 {
+                margin: 0 0 8px 0;
+                font-size: 32px;
+            }
+
+            .hero p {
+                margin: 0;
+                color: #555;
+                font-size: 16px;
+            }
+
+            .hero-actions {
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap;
+                margin-top: 20px;
+            }
+
+            .primary-btn,
+            .secondary-btn {
+                display: inline-block;
+                text-decoration: none;
+                padding: 14px 18px;
+                border-radius: 12px;
+                font-weight: 700;
+            }
+
+            .primary-btn {
+                background: #111;
+                color: white;
+            }
+
+            .secondary-btn {
+                background: #ececec;
+                color: #111;
+            }
+
+            .grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+                margin-bottom: 16px;
+            }
+
+            .card {
+                background: white;
+                border-radius: 16px;
+                padding: 18px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            }
+
+            .card h2 {
+                margin-top: 0;
+                margin-bottom: 12px;
+                font-size: 20px;
+            }
+
+            .meta-number {
+                font-size: 34px;
+                font-weight: 700;
+                margin: 4px 0 0 0;
+            }
+
+            .muted {
+                color: #666;
+                font-size: 14px;
+            }
+
+            .list {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .list-row {
+                display: flex;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 10px 0;
+                border-bottom: 1px solid #eee;
+            }
+
+            .list-row:last-child {
+                border-bottom: none;
+            }
+
+            .list-row div:last-child {
+                font-weight: 700;
+            }
+
+            .forum-box {
+                background: white;
+                border-radius: 16px;
+                padding: 18px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            }
+
+            .forum-tag {
+                display: inline-block;
+                margin-top: 10px;
+                padding: 8px 10px;
+                border-radius: 999px;
+                background: #f0f0f0;
+                font-size: 13px;
+                font-weight: 600;
+                color: #444;
+            }
+
+            @media (max-width: 700px) {
+                .grid {
+                    grid-template-columns: 1fr;
+                }
+
+                .hero h1 {
+                    font-size: 26px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+
+            <div class="navbar">
+                <a href="/" class="active">Forside</a>
+                <a href="/new">Ny runde</a>
+                <a href="/rounds">Runder</a>
+                <a href="/stats">Statistik</a>
+                <a href="/logout">Log ud</a>
+            </div>
+
+            <div class="hero">
+                <h1>Golf Liga</h1>
+                <p>Overblik over runder, statistik og stilling.</p>
+
+                <div class="hero-actions">
+                    <a href="/new" class="primary-btn">Opret ny runde</a>
+                    <a href="/rounds" class="secondary-btn">Se alle runder</a>
+                    <a href="/stats" class="secondary-btn">Se statistik</a>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <div class="muted">Antal registrerede runder</div>
+                    <div class="meta-number">{{ total_rounds }}</div>
+                </div>
+
+                <div class="card">
+                    <h2>Seneste runde</h2>
+                    {% if latest_round %}
+                        <div class="list">
+                            <div><b>Dato:</b> {{ latest_round[1] }}</div>
+                            <div><b>Bane:</b> {{ latest_round[2] }}</div>
+                            <div style="margin-top: 12px;">
+                                <a href="/round/{{ latest_round[0] }}" class="secondary-btn">Se resultat</a>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="muted">Ingen runder endnu.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h2>Top 3 – Point</h2>
+
+                    {% if top_points %}
+                        <div class="list">
+                            {% for p in top_points %}
+                                <div class="list-row">
+                                    <div>{{ loop.index }}. {{ p[0] }}</div>
+                                    <div>{{ p[1] }} point</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="muted">Ingen data endnu.</div>
+                    {% endif %}
+                </div>
+
+                <div class="card">
+                    <h2>Top 3 – Fake money</h2>
+
+                    {% if top_money %}
+                        <div class="list">
+                            {% for p in top_money %}
+                                <div class="list-row">
+                                    <div>{{ loop.index }}. {{ p[0] }}</div>
+                                    <div>{{ p[1] }} kr</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="muted">Ingen data endnu.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="forum-box">
+                <h2>Forum</h2>
+                <div class="muted">
+                    Her kan der senere komme et lille forum eller opslagstavle med beskeder,
+                    aftaler og små updates.
+                </div>
+                <div class="forum-tag">Kommer senere</div>
+            </div>
+
+        </div>
+    </body>
+    </html>
+    """
+
+    return render_template_string(
+        html,
+        latest_round=latest_round,
+        top_points=top_points,
+        top_money=top_money,
+        total_rounds=total_rounds,
+    )
+
+@app.get("/new")
+def new_round():
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
             cur.execute("select id, name from courses order by name;")
@@ -186,6 +527,8 @@ def home():
                 padding: 12px;
                 border-radius: 12px;
                 margin-bottom: 16px;
+                gap: 8px;
+                flex-wrap: wrap;
             }
 
             .navbar a {
@@ -193,6 +536,13 @@ def home():
                 text-decoration: none;
                 font-weight: 600;
                 font-size: 14px;
+                padding: 8px 10px;
+                border-radius: 8px;
+            }
+
+            .navbar a.active {
+                background: white;
+                color: #111;
             }
 
             .card {
@@ -285,7 +635,8 @@ def home():
         <div class="container">
 
             <div class="navbar">
-                <a href="/">Ny runde</a>
+                <a href="/">Forside</a>
+                <a href="/new" class="active">Ny runde</a>
                 <a href="/rounds">Runder</a>
                 <a href="/stats">Statistik</a>
                 <a href="/logout">Log ud</a>
@@ -340,6 +691,7 @@ def home():
                 <button type="submit">Gem runde</button>
             </form>
         </div>
+
         <script>
             function toggleCtpFields() {
                 const isActive = document.getElementById("closest_to_pin_active").checked;
@@ -470,7 +822,8 @@ def list_rounds():
     <body>
         <div class="container">
             <div class="navbar">
-                <a href="/">Ny runde</a>
+                <a href="/">Forside</a>
+                <a href="/new" class="active">Ny runde</a>
                 <a href="/rounds">Runder</a>
                 <a href="/stats">Statistik</a>
                 <a href="/logout">Log ud</a>
@@ -657,7 +1010,8 @@ def show_round(round_id):
         <div class="container">
 
             <div class="navbar">
-                <a href="/">Ny runde</a>
+                <a href="/">Forside</a>
+                <a href="/new" class="active">Ny runde</a>
                 <a href="/rounds">Runder</a>
                 <a href="/stats">Statistik</a>
                 <a href="/logout">Log ud</a>
@@ -905,9 +1259,10 @@ def edit_round(round_id):
         <div class="container">
 
             <div class="navbar">
-                <a href="/">Ny runde</a>
+                <a href="/">Forside</a>
+                <a href="/new">Ny runde</a>
                 <a href="/rounds">Runder</a>
-                <a href="/stats">Statistik</a>
+                <a href="/stats" class="active">Statistik</a>
                 <a href="/logout">Log ud</a>
             </div>
 
@@ -1382,7 +1737,8 @@ def stats():
         <div class="container">
 
             <div class="navbar">
-                <a href="/">Ny Runde</a>
+                <a href="/">Forside</a>
+                <a href="/new">Ny runde</a>
                 <a href="/rounds">Runder</a>
                 <a href="/stats">Statistik</a>
                 <a href="/logout">Log ud</a>
