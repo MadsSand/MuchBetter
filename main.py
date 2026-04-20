@@ -211,7 +211,7 @@ def home():
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Golf Liga</title>
+        <title>MuchBetter Golf Liga</title>
         <style>
             * {
                 box-sizing: border-box;
