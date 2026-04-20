@@ -309,7 +309,7 @@ def home():
                     </div>
 
                     <div class="checkbox-row">
-                        <input type="checkbox" id="closest_to_pin_active" name="closest_to_pin_active">
+                        <input type="checkbox" id="closest_to_pin_active" name="closest_to_pin_active" onchange="toggleCtpFields()">
                         <label for="closest_to_pin_active" style="margin: 0;">Nærmest pinden</label>
                     </div>
 
@@ -328,7 +328,7 @@ def home():
                                 <input type="number" id="score_{{ p[0] }}" name="score_{{ p[0] }}" min="0" max="60">
                             </div>
 
-                            <div class="field">
+                            <div class="field ctp-field" style="display: none;">
                                 <label for="ctp_{{ p[0] }}">Closest (cm)</label>
                                 <input type="number" id="ctp_{{ p[0] }}" name="ctp_{{ p[0] }}" min="0">
                             </div>
@@ -339,6 +339,20 @@ def home():
                 <button type="submit">Gem runde</button>
             </form>
         </div>
+        <script>
+            function toggleCtpFields() {
+                const isActive = document.getElementById("closest_to_pin_active").checked;
+                const ctpFields = document.querySelectorAll(".ctp-field");
+
+                ctpFields.forEach(field => {
+                    field.style.display = isActive ? "block" : "none";
+                });
+            }
+
+            document.addEventListener("DOMContentLoaded", function () {
+                toggleCtpFields();
+            });
+        </script>
     </body>
     </html>
     """
@@ -918,7 +932,8 @@ def edit_round(round_id):
 
                     <div class="checkbox-row">
                         <input type="checkbox" id="closest_to_pin_active" name="closest_to_pin_active"
-                               {% if round_row[3] %}checked{% endif %}>
+                            {% if round_row[3] %}checked{% endif %}
+                            onchange="toggleCtpFields()">
                         <label for="closest_to_pin_active" style="margin: 0;">Nærmest pinden</label>
                     </div>
                 </div>
@@ -940,13 +955,13 @@ def edit_round(round_id):
                                        value="{{ p[2] if p[2] is not none else '' }}">
                             </div>
 
-                            <div class="field">
+                            <div class="field ctp-field" style="display: none;">
                                 <label for="ctp_{{ p[0] }}">Closest (cm)</label>
                                 <input type="number"
-                                       id="ctp_{{ p[0] }}"
-                                       name="ctp_{{ p[0] }}"
-                                       min="0"
-                                       value="{{ p[3] if p[3] is not none else '' }}">
+                                    id="ctp_{{ p[0] }}"
+                                    name="ctp_{{ p[0] }}"
+                                    min="0"
+                                    value="{{ p[3] if p[3] is not none else '' }}">
                             </div>
                         </div>
                     </div>
@@ -955,6 +970,20 @@ def edit_round(round_id):
                 <button type="submit">Gem ændringer</button>
             </form>
         </div>
+        <script>
+            function toggleCtpFields() {
+                const isActive = document.getElementById("closest_to_pin_active").checked;
+                const ctpFields = document.querySelectorAll(".ctp-field");
+
+                ctpFields.forEach(field => {
+                    field.style.display = isActive ? "block" : "none";
+                });
+            }
+
+            document.addEventListener("DOMContentLoaded", function () {
+                toggleCtpFields();
+            });
+        </script>
     </body>
     </html>
     """
@@ -1184,34 +1213,49 @@ def delete_round(round_id):
 
 @app.get("/stats")
 def stats():
+    sort = request.args.get("sort", "wins")
+    direction = request.args.get("direction", "desc")
+
+    allowed_sorts = {
+        "name": "p.full_name",
+        "rounds_played": "rounds_played",
+        "avg_stableford": "avg_stableford",
+        "best_stableford": "best_stableford",
+        "wins": "wins",
+        "top3": "top3",
+        "total_points": "total_points",
+        "total_money": "total_money",
+    }
+
+    allowed_directions = {"asc", "desc"}
+
+    order_by = allowed_sorts.get(sort, "wins")
+    order_direction = direction if direction in allowed_directions else "desc"
+
+    query = f"""
+        select
+            p.full_name,
+            count(*) filter (where rp.status = 'played') as rounds_played,
+            round(avg(rp.stableford_points) filter (where rp.status = 'played'), 2) as avg_stableford,
+            max(rp.stableford_points) as best_stableford,
+            count(*) filter (where rp.position = 1) as wins,
+            count(*) filter (
+                where rp.position <= 3
+                and rp.position is not null
+            ) as top3,
+            coalesce(sum(rp.season_points), 0) as total_points,
+            coalesce(sum(rp.money_rank), 0) as total_money
+        from players p
+        left join round_players rp
+            on rp.player_id = p.id
+        where p.is_active = true
+        group by p.id, p.full_name
+        order by {order_by} {order_direction} nulls last, p.full_name;
+    """
+
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                select
-                    p.full_name,
-                    count(*) filter (where rp.status = 'played') as rounds_played,
-                    round(avg(rp.stableford_points) filter (where rp.status = 'played'), 2) as avg_stableford,
-                    max(rp.stableford_points) as best_stableford,
-                    count(*) filter (where rp.position = 1) as wins,
-                    count(*) filter (
-                        where rp.position <= 3
-                        and rp.position is not null
-                    ) as top3,
-                    coalesce(sum(rp.season_points), 0) as total_points,
-                    coalesce(sum(rp.money_rank), 0) as total_money
-                from players p
-                left join round_players rp
-                    on rp.player_id = p.id
-                where p.is_active = true
-                group by p.id, p.full_name
-                order by
-                    wins desc,
-                    total_points desc,
-                    avg_stableford desc nulls last,
-                    p.full_name;
-                """
-            )
+            cur.execute(query)
             player_stats = cur.fetchall()
 
     html = """
@@ -1294,6 +1338,43 @@ def stats():
                 color: #666;
                 font-size: 14px;
             }
+
+            .sort-bar {
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap;
+                align-items: end;
+            }
+
+            .field {
+                min-width: 220px;
+            }
+
+            label {
+                display: block;
+                font-weight: 600;
+                margin-bottom: 6px;
+            }
+
+            select {
+                width: 100%;
+                padding: 12px;
+                border-radius: 10px;
+                border: 1px solid #ccc;
+                font-size: 16px;
+                background: white;
+            }
+
+            button {
+                padding: 12px 18px;
+                background: #111;
+                color: white;
+                border: none;
+                border-radius: 12px;
+                font-weight: bold;
+                font-size: 16px;
+                cursor: pointer;
+            }
         </style>
     </head>
     <body>
@@ -1307,6 +1388,38 @@ def stats():
             </div>
 
             <h1>Statistik</h1>
+
+            <div class="card">
+                <h2>Sortering</h2>
+
+                <form method="get" action="/stats" class="sort-bar">
+                    <div class="field">
+                        <label for="sort">Sorter efter</label>
+                        <select id="sort" name="sort">
+                            <option value="wins" {% if sort == "wins" %}selected{% endif %}>Sejre</option>
+                            <option value="total_points" {% if sort == "total_points" %}selected{% endif %}>Total point</option>
+                            <option value="total_money" {% if sort == "total_money" %}selected{% endif %}>Total money</option>
+                            <option value="avg_stableford" {% if sort == "avg_stableford" %}selected{% endif %}>Snit stableford</option>
+                            <option value="best_stableford" {% if sort == "best_stableford" %}selected{% endif %}>Bedste score</option>
+                            <option value="rounds_played" {% if sort == "rounds_played" %}selected{% endif %}>Spillede runder</option>
+                            <option value="top3" {% if sort == "top3" %}selected{% endif %}>Top 3</option>
+                            <option value="name" {% if sort == "name" %}selected{% endif %}>Navn</option>
+                        </select>
+                    </div>
+
+                    <div class="field">
+                        <label for="direction">Retning</label>
+                        <select id="direction" name="direction">
+                            <option value="desc" {% if direction == "desc" %}selected{% endif %}>Høj til lav</option>
+                            <option value="asc" {% if direction == "asc" %}selected{% endif %}>Lav til høj</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <button type="submit">Opdater</button>
+                    </div>
+                </form>
+            </div>
 
             <div class="card">
                 <h2>Spillerstatistik</h2>
@@ -1348,7 +1461,12 @@ def stats():
     </html>
     """
 
-    return render_template_string(html, player_stats=player_stats)
+    return render_template_string(
+        html,
+        player_stats=player_stats,
+        sort=sort,
+        direction=direction,
+    )
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
