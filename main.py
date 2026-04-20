@@ -466,8 +466,7 @@ def home():
             <div class="forum-box">
                 <h2>Forum</h2>
                 <div class="muted">
-                    Her kan der senere komme et lille forum eller opslagstavle med beskeder,
-                    aftaler og små updates.
+                    Her kommer der snart et lille forum
                 </div>
                 <div class="forum-tag">Kommer senere</div>
             </div>
