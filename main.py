@@ -225,6 +225,7 @@ def home():
                     from previous_totals
                 )
                 select
+                    rc.player_id,
                     rc.full_name,
                     rc.total_points,
                     rc.current_rank,
@@ -309,6 +310,7 @@ def home():
                     from previous_totals
                 )
                 select
+                    rc.player_id,
                     rc.full_name,
                     rc.total_money,
                     rc.current_rank,
@@ -602,15 +604,15 @@ def home():
                         <div class="list">
                             {% for p in top_points %}
                                 <div class="list-row">
-                                    <div>{{ p[2] }}. {{ p[0] }}</div>
+                                    <div>{{ p[3] }}. <a class="player-link" href="/player/{{ p[0] }}">{{ p[1] }}</a></div>
                                     <div class="value-wrap">
-                                        <div>{{ p[1] }} point</div>
+                                        <div>{{ p[2] }} point</div>
 
-                                        {% if p[4] == "up" %}
-                                            <span class="movement up">▲ {{ p[5] }}</span>
-                                        {% elif p[4] == "down" %}
-                                            <span class="movement down">▼ {{ p[5] }}</span>
-                                        {% elif p[4] == "new" %}
+                                        {% if p[5] == "up" %}
+                                            <span class="movement up">▲ {{ p[6] }}</span>
+                                        {% elif p[5] == "down" %}
+                                            <span class="movement down">▼ {{ p[6] }}</span>
+                                        {% elif p[5] == "new" %}
                                             <span class="movement new">Ny</span>
                                         {% else %}
                                             <span class="movement same">–</span>
@@ -631,15 +633,15 @@ def home():
                         <div class="list">
                             {% for p in top_money %}
                                 <div class="list-row">
-                                    <div>{{ p[2] }}. {{ p[0] }}</div>
+                                    <div>{{ p[3] }}. <a class="player-link" href="/player/{{ p[0] }}">{{ p[1] }}</a></div>
                                     <div class="value-wrap">
-                                        <div>{{ p[1] }} kr</div>
+                                        <div>{{ p[2] }} kr</div>
 
-                                        {% if p[4] == "up" %}
-                                            <span class="movement up">▲ {{ p[5] }}</span>
-                                        {% elif p[4] == "down" %}
-                                            <span class="movement down">▼ {{ p[5] }}</span>
-                                        {% elif p[4] == "new" %}
+                                        {% if p[5] == "up" %}
+                                            <span class="movement up">▲ {{ p[6] }}</span>
+                                        {% elif p[5] == "down" %}
+                                            <span class="movement down">▼ {{ p[6] }}</span>
+                                        {% elif p[5] == "new" %}
                                             <span class="movement new">Ny</span>
                                         {% else %}
                                             <span class="movement same">–</span>
@@ -652,7 +654,6 @@ def home():
                         <div class="muted">Ingen data endnu.</div>
                     {% endif %}
                 </div>
-            </div>
 
             <div class="forum-box">
                 <h2>Forum</h2>
@@ -1063,6 +1064,7 @@ def show_round(round_id):
             cur.execute(
                 """
                 select
+                    p.id,
                     p.full_name,
                     rp.status,
                     rp.stableford_points,
@@ -1085,6 +1087,7 @@ def show_round(round_id):
             cur.execute(
                 """
                 select
+                    p.id,
                     p.full_name,
                     coalesce(sum(case when r.season_year = %s then rp.season_points else 0 end), 0) as total_points,
                     coalesce(sum(case when r.season_year = %s then rp.money_rank else 0 end), 0) as total_money,
@@ -1194,6 +1197,15 @@ def show_round(round_id):
             .meta {
                 line-height: 1.7;
             }
+            .player-link {
+                color: #111;
+                text-decoration: none;
+                font-weight: 600;
+            }
+
+            .player-link:hover {
+                text-decoration: underline;
+            }
         </style>
     </head>
     <body>
@@ -1232,13 +1244,13 @@ def show_round(round_id):
 
                         {% for r in daily_rows %}
                         <tr>
-                            <td>{{ r[3] if r[3] is not none else "" }}</td>
-                            <td>{{ r[0] }}</td>
-                            <td>{{ r[1] }}</td>
-                            <td>{{ r[2] if r[2] is not none else "" }}</td>
                             <td>{{ r[4] if r[4] is not none else "" }}</td>
+                            <td><a class="player-link" href="/player/{{ r[0] }}">{{ r[1] }}</a></td>
+                            <td>{{ r[2] }}</td>
+                            <td>{{ r[3] if r[3] is not none else "" }}</td>
                             <td>{{ r[5] if r[5] is not none else "" }}</td>
                             <td>{{ r[6] if r[6] is not none else "" }}</td>
+                            <td>{{ r[7] if r[7] is not none else "" }}</td>
                         </tr>
                         {% endfor %}
                     </table>
@@ -1260,10 +1272,10 @@ def show_round(round_id):
                         {% for r in season_rows %}
                         <tr>
                             <td>{{ loop.index }}</td>
-                            <td>{{ r[0] }}</td>
-                            <td>{{ r[1] }}</td>
+                            <td><a class="player-link" href="/player/{{ r[0] }}">{{ r[1] }}</a></td>
                             <td>{{ r[2] }}</td>
                             <td>{{ r[3] }}</td>
+                            <td>{{ r[4] }}</td>
                         </tr>
                         {% endfor %}
                     </table>
@@ -1827,10 +1839,10 @@ def stats():
                 coalesce(sum(
                     case
                         when r.season_year = lr.season_year
-                         and (
-                              r.round_date < lr.round_date
-                              or (r.round_date = lr.round_date and r.id < lr.id)
-                         )
+                        and (
+                            r.round_date < lr.round_date
+                            or (r.round_date = lr.round_date and r.id < lr.id)
+                        )
                         then rp.season_points
                         else 0
                     end
@@ -1838,10 +1850,10 @@ def stats():
                 coalesce(sum(
                     case
                         when r.season_year = lr.season_year
-                         and (
-                              r.round_date < lr.round_date
-                              or (r.round_date = lr.round_date and r.id < lr.id)
-                         )
+                        and (
+                            r.round_date < lr.round_date
+                            or (r.round_date = lr.round_date and r.id < lr.id)
+                        )
                         then rp.money_rank
                         else 0
                     end
@@ -1856,6 +1868,7 @@ def stats():
             group by p.id
         )
         select
+            p.id,
             p.full_name,
             count(*) filter (where rp.status = 'played') as rounds_played,
             round(avg(rp.stableford_points) filter (where rp.status = 'played'), 2) as avg_stableford,
@@ -2042,6 +2055,16 @@ def stats():
                 background: #f2f4f7;
                 color: #667085;
             }
+
+            .player-link {
+                color: #111;
+                text-decoration: none;
+                font-weight: 600;
+            }
+
+            .player-link:hover {
+                text-decoration: underline;
+            }
         </style>
     </head>
     <body>
@@ -2110,36 +2133,36 @@ def stats():
                         </tr>
 
                         {% for r in player_stats %}
-                        <tr>
-                            <td>{{ loop.index }}</td>
-                            <td>{{ r[0] }}</td>
-                            <td>{{ r[1] }}</td>
-                            <td>{{ r[2] if r[2] is not none else "" }}</td>
-                            <td>{{ r[3] if r[3] is not none else "" }}</td>
-                            <td>{{ r[4] }}</td>
-                            <td>{{ r[5] }}</td>
-                            <td>{{ r[6] if r[6] is not none else 0 }}</td>
-                            <td>
-                                {% if r[8] > 0 %}
-                                    <span class="change up">▲ {{ r[8] }}</span>
-                                {% elif r[8] < 0 %}
-                                    <span class="change down">▼ {{ -r[8] }}</span>
-                                {% else %}
-                                    <span class="change same">–</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ r[7] if r[7] is not none else 0 }}</td>
-                            <td>
-                                {% if r[9] > 0 %}
-                                    <span class="change up">▲ {{ r[9] }}</span>
-                                {% elif r[9] < 0 %}
-                                    <span class="change down">▼ {{ -r[9] }}</span>
-                                {% else %}
-                                    <span class="change same">–</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td><a class="player-link" href="/player/{{ r[0] }}">{{ r[1] }}</a></td>
+                                <td>{{ r[2] }}</td>
+                                <td>{{ r[3] if r[3] is not none else "" }}</td>
+                                <td>{{ r[4] if r[4] is not none else "" }}</td>
+                                <td>{{ r[5] }}</td>
+                                <td>{{ r[6] }}</td>
+                                <td>{{ r[7] if r[7] is not none else 0 }}</td>
+                                <td>
+                                    {% if r[9] > 0 %}
+                                        <span class="change up">▲ {{ r[9] }}</span>
+                                    {% elif r[9] < 0 %}
+                                        <span class="change down">▼ {{ -r[9] }}</span>
+                                    {% else %}
+                                        <span class="change same">–</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ r[8] if r[8] is not none else 0 }}</td>
+                                <td>
+                                    {% if r[10] > 0 %}
+                                        <span class="change up">▲ {{ r[10] }}</span>
+                                    {% elif r[10] < 0 %}
+                                        <span class="change down">▼ {{ -r[10] }}</span>
+                                    {% else %}
+                                        <span class="change same">–</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
                     </table>
                 </div>
             </div>
@@ -2180,6 +2203,675 @@ def stats():
 @app.get("/health")
 def health():
     return {"ok": True}, 200
+
+@app.get("/player/<int:player_id>")
+def player_page(player_id):
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select
+                    p.id,
+                    p.full_name,
+                    count(*) filter (where rp.status = 'played') as rounds_played,
+                    round(avg(rp.stableford_points) filter (where rp.status = 'played'), 2) as avg_stableford,
+                    max(rp.stableford_points) as best_stableford,
+                    count(*) filter (where rp.position = 1) as wins,
+                    count(*) filter (
+                        where rp.position <= 3
+                        and rp.position is not null
+                    ) as top3,
+                    coalesce(sum(rp.season_points), 0) as total_points,
+                    coalesce(sum(rp.money_rank), 0) as total_money
+                from players p
+                left join round_players rp
+                    on rp.player_id = p.id
+                where p.id = %s
+                  and p.is_active = true
+                group by p.id, p.full_name;
+                """,
+                (player_id,)
+            )
+            player = cur.fetchone()
+
+            if not player:
+                return "Spilleren blev ikke fundet", 404
+
+            cur.execute(
+                """
+                select
+                    r.id,
+                    r.round_date,
+                    c.name,
+                    rp.stableford_points,
+                    rp.position,
+                    rp.season_points,
+                    rp.money_rank
+                from round_players rp
+                join rounds r on r.id = rp.round_id
+                join courses c on c.id = r.course_id
+                where rp.player_id = %s
+                  and rp.status = 'played'
+                order by r.round_date desc, r.id desc
+                limit 5;
+                """,
+                (player_id,)
+            )
+            last_5_rounds = cur.fetchall()
+
+            cur.execute(
+                """
+                with player_seasons as (
+                    select distinct r.season_year
+                    from round_players rp
+                    join rounds r on r.id = rp.round_id
+                    where rp.player_id = %s
+                ),
+                relevant_rounds as (
+                    select
+                        r.id as round_id,
+                        r.round_date,
+                        r.season_year,
+                        c.name as course_name
+                    from rounds r
+                    join courses c on c.id = r.course_id
+                    where r.season_year in (select season_year from player_seasons)
+                ),
+                player_round_data as (
+                    select
+                        rr.round_id,
+                        rr.round_date,
+                        rr.season_year,
+                        rr.course_name,
+                        coalesce(rp.position, null) as round_position,
+                        coalesce(rp.stableford_points, 0) as stableford_points,
+                        coalesce(rp.season_points, 0) as season_points,
+                        coalesce(rp.money_rank, 0) as money_rank,
+                        coalesce(rp.status, 'dnp') as status
+                    from relevant_rounds rr
+                    left join round_players rp
+                        on rp.round_id = rr.round_id
+                    and rp.player_id = %s
+                ),
+                leaderboard_after_each_round as (
+                    select
+                        rr.round_id,
+                        p.id as player_id,
+                        rank() over (
+                            partition by rr.round_id
+                            order by
+                                coalesce(sum(
+                                    case
+                                        when r2.season_year = rr.season_year
+                                        and (
+                                            r2.round_date < rr.round_date
+                                            or (r2.round_date = rr.round_date and r2.id <= rr.round_id)
+                                        )
+                                        then rp2.season_points
+                                        else 0
+                                    end
+                                ), 0) desc,
+                                coalesce(sum(
+                                    case
+                                        when r2.season_year = rr.season_year
+                                        and (
+                                            r2.round_date < rr.round_date
+                                            or (r2.round_date = rr.round_date and r2.id <= rr.round_id)
+                                        )
+                                        then rp2.money_rank
+                                        else 0
+                                    end
+                                ), 0) desc,
+                                p.full_name
+                        ) as leaderboard_position
+                    from relevant_rounds rr
+                    cross join players p
+                    left join round_players rp2
+                        on rp2.player_id = p.id
+                    left join rounds r2
+                        on r2.id = rp2.round_id
+                    where p.is_active = true
+                    group by rr.round_id, rr.season_year, rr.round_date, p.id, p.full_name
+                ),
+                final_rows as (
+                    select
+                        prd.round_id,
+                        prd.round_date,
+                        prd.course_name,
+                        prd.round_position,
+                        prd.stableford_points,
+                        prd.season_points,
+                        prd.money_rank,
+                        prd.status,
+                        sum(prd.season_points) over (
+                            partition by prd.season_year
+                            order by prd.round_date, prd.round_id
+                            rows between unbounded preceding and current row
+                        ) as running_points,
+                        sum(prd.money_rank) over (
+                            partition by prd.season_year
+                            order by prd.round_date, prd.round_id
+                            rows between unbounded preceding and current row
+                        ) as running_money,
+                        laer.leaderboard_position
+                    from player_round_data prd
+                    left join leaderboard_after_each_round laer
+                        on laer.round_id = prd.round_id
+                    and laer.player_id = %s
+                )
+                select
+                    round_id,
+                    round_date,
+                    course_name,
+                    round_position,
+                    stableford_points,
+                    season_points,
+                    money_rank,
+                    status,
+                    running_points,
+                    running_money,
+                    leaderboard_position
+                from final_rows
+                order by round_date, round_id;
+                """,
+                (player_id, player_id, player_id)
+            )
+            progress_rows = cur.fetchall()
+
+    chart_labels = [str(row[1]) for row in progress_rows]
+    chart_positions = [int(row[10]) if row[10] is not None else None for row in progress_rows]
+    chart_stableford = [int(row[4]) if row[7] == "played" and row[4] is not None else None for row in progress_rows]
+    chart_round_points = [float(row[5]) if row[5] is not None else 0 for row in progress_rows]
+    chart_round_money = [float(row[6]) if row[6] is not None else 0 for row in progress_rows]
+    chart_running_points = [float(row[8]) if row[8] is not None else 0 for row in progress_rows]
+    chart_running_money = [float(row[9]) if row[9] is not None else 0 for row in progress_rows]
+
+    html = """
+    <!doctype html>
+    <html lang="da">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>{{ player[1] }}</title>
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 16px;
+                background: #f5f5f5;
+                color: #111;
+            }
+
+            .container {
+                max-width: 1100px;
+                margin: 0 auto;
+            }
+
+            .navbar {
+                display: flex;
+                justify-content: space-around;
+                align-items: center;
+                background: #111;
+                padding: 12px;
+                border-radius: 12px;
+                margin-bottom: 20px;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            .navbar a {
+                color: white;
+                text-decoration: none;
+                font-weight: 600;
+                font-size: 14px;
+                padding: 8px 10px;
+                border-radius: 8px;
+            }
+
+            .card {
+                background: white;
+                border-radius: 16px;
+                padding: 18px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+                margin-bottom: 16px;
+            }
+
+            .profile {
+                display: grid;
+                grid-template-columns: 120px 1fr;
+                gap: 18px;
+                align-items: center;
+            }
+
+            .avatar {
+                width: 120px;
+                height: 120px;
+                border-radius: 50%;
+                background: #111;
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 42px;
+                font-weight: 700;
+            }
+
+            .profile h1 {
+                margin: 0 0 8px 0;
+            }
+
+            .muted {
+                color: #666;
+                font-size: 14px;
+            }
+
+            .stats-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 16px;
+                margin-bottom: 16px;
+            }
+
+            .stat-box {
+                background: white;
+                border-radius: 16px;
+                padding: 18px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            }
+
+            .stat-label {
+                color: #666;
+                font-size: 14px;
+                margin-bottom: 8px;
+            }
+
+            .stat-value {
+                font-size: 28px;
+                font-weight: 700;
+            }
+
+            .charts-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+                margin-bottom: 16px;
+            }
+
+            .chart-card {
+                background: white;
+                border-radius: 16px;
+                padding: 22px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+                margin-top: 10px;
+            }
+
+            .chart-card h2 {
+                margin-top: 0;
+                margin-bottom: 8px;
+            }
+
+            .table-wrap {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            table {
+                width: 100%;
+                min-width: 700px;
+                border-collapse: collapse;
+            }
+
+            th, td {
+                padding: 10px 12px;
+                border-bottom: 1px solid #e5e5e5;
+                text-align: left;
+                white-space: nowrap;
+            }
+
+            th {
+                background: #fafafa;
+            }
+
+            .round-link, .player-link {
+                color: #111;
+                text-decoration: none;
+                font-weight: 600;
+            }
+
+            .round-link:hover, .player-link:hover {
+                text-decoration: underline;
+            }
+
+            canvas {
+                width: 100%;
+                max-width: 100%;
+            }
+
+            @media (max-width: 900px) {
+                .stats-grid {
+                    grid-template-columns: 1fr 1fr;
+                }
+
+                .charts-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+
+            @media (max-width: 700px) {
+                .profile {
+                    grid-template-columns: 1fr;
+                    text-align: center;
+                }
+
+                .avatar {
+                    margin: 0 auto;
+                }
+            }
+
+            @media (max-width: 520px) {
+                .stats-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="navbar">
+                <a href="/">Forside</a>
+                <a href="/new">Ny runde</a>
+                <a href="/rounds">Runder</a>
+                <a href="/stats">Statistik</a>
+                <a href="/logout">Log ud</a>
+            </div>
+
+            <div class="card profile">
+                <div class="avatar">{{ player[1][0] }}</div>
+                <div>
+                    <h1>{{ player[1] }}</h1>
+                    <div class="muted">Spillerprofil og udvikling</div>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-label">Snit stableford</div>
+                    <div class="stat-value">{{ player[3] if player[3] is not none else 0 }}</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-label">Bedste score</div>
+                    <div class="stat-value">{{ player[4] if player[4] is not none else 0 }}</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-label">Sejre</div>
+                    <div class="stat-value">{{ player[5] }}</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-label">Top 3</div>
+                    <div class="stat-value">{{ player[6] }}</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-label">Spillede runder</div>
+                    <div class="stat-value">{{ player[2] }}</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-label">Total point</div>
+                    <div class="stat-value">{{ player[7] }}</div>
+                </div>
+
+                <div class="stat-box">
+                    <div class="stat-label">Total fake money</div>
+                    <div class="stat-value">{{ player[8] }}</div>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <h2>Placering pr. runde</h2>
+                {% if chart_labels %}
+                    <canvas id="placementChart" height="160"></canvas>
+                    <div class="muted" style="margin-top: 10px;">Graf over spillerens placering i hver runde.</div>
+                {% else %}
+                    <div class="muted">Ingen runder endnu.</div>
+                {% endif %}
+            </div>
+
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <h2>Point</h2>
+                    {% if chart_labels %}
+                        <canvas id="pointsChart" height="200"></canvas>
+                        <div class="muted" style="margin-top: 10px;">Klik på farverne for at vise eller skjule serier.</div>
+                    {% else %}
+                        <div class="muted">Ingen runder endnu.</div>
+                    {% endif %}
+                </div>
+
+                <div class="chart-card">
+                    <h2>Fake money</h2>
+                    {% if chart_labels %}
+                        <canvas id="moneyChart" height="200"></canvas>
+                        <div class="muted" style="margin-top: 10px;">Klik på farverne for at vise eller skjule serier.</div>
+                    {% else %}
+                        <div class="muted">Ingen runder endnu.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Sidste 5 runder</h2>
+                <div class="table-wrap">
+                    <table>
+                        <tr>
+                            <th>Dato</th>
+                            <th>Bane</th>
+                            <th>Stableford</th>
+                            <th>Pos</th>
+                            <th>Point</th>
+                            <th>Money</th>
+                        </tr>
+                        {% for r in last_5_rounds %}
+                        <tr>
+                            <td><a class="round-link" href="/round/{{ r[0] }}">{{ r[1] }}</a></td>
+                            <td>{{ r[2] }}</td>
+                            <td>{{ r[3] }}</td>
+                            <td>{{ r[4] }}</td>
+                            <td>{{ r[5] }}</td>
+                            <td>{{ r[6] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        {% if chart_labels %}
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script>
+            const labels = {{ chart_labels | tojson }};
+            const positions = {{ chart_positions | tojson }};
+            const stableford = {{ chart_stableford | tojson }};
+            const roundPoints = {{ chart_round_points | tojson }};
+            const roundMoney = {{ chart_round_money | tojson }};
+            const runningPoints = {{ chart_running_points | tojson }};
+            const runningMoney = {{ chart_running_money | tojson }};
+
+            new Chart(document.getElementById("placementChart"), {
+                type: "line",
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: "Placering",
+                            data: positions,
+                            borderColor: "#dc2626",
+                            backgroundColor: "#dc2626",
+                            tension: 0.25,
+                            pointRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: {
+                        mode: "index",
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            reverse: true,
+                            beginAtZero: false,
+                            ticks: {
+                                precision: 0,
+                                stepSize: 1
+                            },
+                            title: {
+                                display: true,
+                                text: "Placering"
+                            }
+                        }
+                    }
+                }
+            });
+
+            new Chart(document.getElementById("pointsChart"), {
+                type: "line",
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: "Point pr. runde",
+                            data: roundPoints,
+                            borderColor: "#2563eb",
+                            backgroundColor: "#2563eb",
+                            tension: 0.25,
+                            pointRadius: 4,
+                            hidden: false
+                        },
+                        {
+                            label: "Samlet point pr. runde",
+                            data: runningPoints,
+                            borderColor: "#111111",
+                            backgroundColor: "#111111",
+                            tension: 0.25,
+                            pointRadius: 4,
+                            hidden: false
+                        },
+                        {
+                            label: "Stableford",
+                            data: stableford,
+                            borderColor: "#7c3aed",
+                            backgroundColor: "#7c3aed",
+                            tension: 0.25,
+                            pointRadius: 4,
+                            hidden: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: {
+                        mode: "index",
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: "top"
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: "Point"
+                            }
+                        }
+                    }
+                }
+            });
+
+            new Chart(document.getElementById("moneyChart"), {
+                type: "line",
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: "Fake money pr. runde",
+                            data: roundMoney,
+                            borderColor: "#f59e0b",
+                            backgroundColor: "#f59e0b",
+                            tension: 0.25,
+                            pointRadius: 4,
+                            hidden: false
+                        },
+                        {
+                            label: "Samlet fake money pr. runde",
+                            data: runningMoney,
+                            borderColor: "#16a34a",
+                            backgroundColor: "#16a34a",
+                            tension: 0.25,
+                            pointRadius: 4,
+                            hidden: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: {
+                        mode: "index",
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: "top"
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: "Fake money"
+                            }
+                        }
+                    }
+                }
+            });
+        </script>
+        {% endif %}
+    </body>
+    </html>
+    """
+
+    return render_template_string(
+        html,
+        player=player,
+        last_5_rounds=last_5_rounds,
+        chart_labels=chart_labels,
+        chart_positions=chart_positions,
+        chart_stableford=chart_stableford,
+        chart_round_points=chart_round_points,
+        chart_round_money=chart_round_money,
+        chart_running_points=chart_running_points,
+        chart_running_money=chart_running_money,
+    )
+
 
 app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SESSION_COOKIE_HTTPONLY"] = True
