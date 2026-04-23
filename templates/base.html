@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="da">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Golf Liga{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    {% block page_shell %}
+    <div class="container">
+        <div class="navbar">
+            <a href="/" class="{% if request.path == '/' %}active{% endif %}">Forside</a>
+            <a href="/rounds" class="{% if '/rounds' in request.path %}active{% endif %}">Runder</a>
+            <a href="/stats" class="{% if '/stats' in request.path %}active{% endif %}">Statistik</a>
+            <a href="/logout">Log ud</a>
+        </div>
+
+        {% block content %}{% endblock %}
+    </div>
+    {% endblock %}
+</body>
+</html>

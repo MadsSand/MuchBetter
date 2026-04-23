@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Ny runde{% endblock %}
+
+{% block content %}
+<h1>Ny runde</h1>
+
+<form method="post" action="/save">
+    <div class="card">
+        <div class="field">
+            <label for="round_date">Dato</label>
+            <input type="date" id="round_date" name="round_date" required>
+        </div>
+
+        <div class="field">
+            <label for="course_id">Bane</label>
+            <select id="course_id" name="course_id" required>
+                {% for c in courses %}
+                    <option value="{{ c[0] }}">{{ c[1] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="checkbox-row">
+            <input type="checkbox" id="closest_to_pin_active" name="closest_to_pin_active" onchange="toggleCtpFields()">
+            <label for="closest_to_pin_active" style="margin: 0;">Nærmest pinden</label>
+        </div>
+
+        <div class="hint">Tom stableford betyder DNP.</div>
+    </div>
+
+    <h2>Spillere</h2>
+
+    {% for p in players %}
+        <div class="player-card">
+            <div class="player-name">{{ p[1] }}</div>
+
+            <div class="player-grid">
+                <div class="field">
+                    <label for="score_{{ p[0] }}">Stableford</label>
+                    <input type="number" id="score_{{ p[0] }}" name="score_{{ p[0] }}" min="0" max="60">
+                </div>
+
+                <div class="field ctp-field" style="display: none;">
+                    <label for="ctp_{{ p[0] }}">Closest (cm)</label>
+                    <input type="number" id="ctp_{{ p[0] }}" name="ctp_{{ p[0] }}" min="0">
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+
+    <button type="submit">Gem runde</button>
+</form>
+
+<script>
+    function toggleCtpFields() {
+        const isActive = document.getElementById("closest_to_pin_active").checked;
+        const ctpFields = document.querySelectorAll(".ctp-field");
+
+        ctpFields.forEach(field => {
+            field.style.display = isActive ? "block" : "none";
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        toggleCtpFields();
+    });
+</script>
+{% endblock %}

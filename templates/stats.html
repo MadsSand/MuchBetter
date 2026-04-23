@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Statistik{% endblock %}
+
+{% block page_shell %}
+<div class="container-wide">
+    <div class="navbar">
+        <a href="/" class="{% if request.path == '/' %}active{% endif %}">Forside</a>
+        <a href="/rounds" class="{% if '/rounds' in request.path %}active{% endif %}">Runder</a>
+        <a href="/stats" class="{% if '/stats' in request.path %}active{% endif %}">Statistik</a>
+        <a href="/logout">Log ud</a>
+    </div>
+
+    {% block content %}
+    <h1>Statistik</h1>
+
+    <div class="card">
+        <h2>Sortering</h2>
+
+        <form method="get" action="/stats" class="sort-bar">
+            <div class="field">
+                <label for="sort">Sorter efter</label>
+                <select id="sort" name="sort">
+                    <option value="wins" {% if sort == "wins" %}selected{% endif %}>Sejre</option>
+                    <option value="total_points" {% if sort == "total_points" %}selected{% endif %}>Total point</option>
+                    <option value="total_money" {% if sort == "total_money" %}selected{% endif %}>Total money</option>
+                    <option value="avg_stableford" {% if sort == "avg_stableford" %}selected{% endif %}>Snit stableford</option>
+                    <option value="best_stableford" {% if sort == "best_stableford" %}selected{% endif %}>Bedste score</option>
+                    <option value="rounds_played" {% if sort == "rounds_played" %}selected{% endif %}>Spillede runder</option>
+                    <option value="top3" {% if sort == "top3" %}selected{% endif %}>Top 3</option>
+                    <option value="name" {% if sort == "name" %}selected{% endif %}>Navn</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="direction">Retning</label>
+                <select id="direction" name="direction">
+                    <option value="desc" {% if direction == "desc" %}selected{% endif %}>Høj til lav</option>
+                    <option value="asc" {% if direction == "asc" %}selected{% endif %}>Lav til høj</option>
+                </select>
+            </div>
+
+            <div>
+                <button type="submit">Opdater</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Spillerstatistik</h2>
+        <div class="muted">Oversigt over aktive spillere på tværs af alle runder.</div>
+
+        <div class="table-wrap" style="margin-top: 12px;">
+            <table>
+                <tr>
+                    <th>Pos</th>
+                    <th>Spiller</th>
+                    <th>Runder</th>
+                    <th>Snit stableford</th>
+                    <th>Bedste score</th>
+                    <th>Sejre</th>
+                    <th>Top 3</th>
+                    <th>Total point</th>
+                    <th>Point siden sidst</th>
+                    <th>Total money</th>
+                    <th>Money siden sidst</th>
+                </tr>
+
+                {% for r in player_stats %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><a class="player-link" href="/player/{{ r[0] }}">{{ r[1] }}</a></td>
+                    <td>{{ r[2] }}</td>
+                    <td>{{ r[3] if r[3] is not none else "" }}</td>
+                    <td>{{ r[4] if r[4] is not none else "" }}</td>
+                    <td>{{ r[5] }}</td>
+                    <td>{{ r[6] }}</td>
+                    <td>{{ r[7] if r[7] is not none else 0 }}</td>
+                    <td>
+                        {% if r[9] > 0 %}
+                            <span class="change up">▲ {{ r[9] }}</span>
+                        {% elif r[9] < 0 %}
+                            <span class="change down">▼ {{ -r[9] }}</span>
+                        {% else %}
+                            <span class="change same">–</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ r[8] if r[8] is not none else 0 }}</td>
+                    <td>
+                        {% if r[10] > 0 %}
+                            <span class="change up">▲ {{ r[10] }}</span>
+                        {% elif r[10] < 0 %}
+                            <span class="change down">▼ {{ -r[10] }}</span>
+                        {% else %}
+                            <span class="change same">–</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Pointsystem</h2>
+        <div class="muted" style="line-height: 1.6;">
+            <b>Sådan beregnes point:</b><br><br>
+            Du får <b>2 point pr. spiller du vinder over på dagen</b><br>
+            <b>Bonus til top 3:</b><br>
+            &nbsp;&nbsp;&nbsp;1. plads: +4 point<br>
+            &nbsp;&nbsp;&nbsp;2. plads: +2 point<br>
+            &nbsp;&nbsp;&nbsp;3. plads: +1 point<br><br>
+            Sidsteplads giver 0 point<br>
+            Ved uafgjort deles point for de placeringer man optager<br><br>
+            <span style="font-size: 13px;">
+                Eksempel: 8 spillere → vinder får 2×7 pr. spiller man har vundet over + 4 bonus = 18 point
+            </span>
+        </div>
+    </div>
+    {% endblock %}
+</div>
+{% endblock %}

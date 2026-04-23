@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Resultater{% endblock %}
+
+{% block content %}
+<h1>Resultater</h1>
+
+<div class="card meta">
+    <b>Dato:</b> {{ round_date }}<br>
+    <b>Bane:</b> {{ course_name }}<br>
+    <b>Sæson:</b> {{ season_year }}<br>
+    <b>Dagens præmiepulje:</b> {{ prize_pool }}
+</div>
+
+<div class="card">
+    <h2>Dagens resultat</h2>
+    <div class="table-wrap">
+        <table>
+            <tr>
+                <th>Pos</th>
+                <th>Spiller</th>
+                <th>Status</th>
+                <th>Stableford</th>
+                <th>Point</th>
+                <th>Money</th>
+                <th>Closest</th>
+            </tr>
+
+            {% for r in daily_rows %}
+            <tr>
+                <td>{{ r[4] if r[4] is not none else "" }}</td>
+                <td><a class="player-link" href="/player/{{ r[0] }}">{{ r[1] }}</a></td>
+                <td>{{ r[2] }}</td>
+                <td>{{ r[3] if r[3] is not none else "" }}</td>
+                <td>{{ r[5] if r[5] is not none else "" }}</td>
+                <td>{{ r[6] if r[6] is not none else "" }}</td>
+                <td>{{ r[7] if r[7] is not none else "" }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Sæson leaderboard</h2>
+    <div class="table-wrap">
+        <table>
+            <tr>
+                <th>Pos</th>
+                <th>Spiller</th>
+                <th>Total point</th>
+                <th>Total money</th>
+                <th>Spillede runder</th>
+            </tr>
+
+            {% for r in season_rows %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td><a class="player-link" href="/player/{{ r[0] }}">{{ r[1] }}</a></td>
+                <td>{{ r[2] }}</td>
+                <td>{{ r[3] }}</td>
+                <td>{{ r[4] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+<div class="button-row">
+    <a class="button-link" href="/rounds">Tilbage til runder</a>
+    <a class="button-link" href="/new">Opret ny runde</a>
+    <a class="button-link" href="/round/{{ round_id }}/edit">Ret runde</a>
+
+    <form method="post" action="/round/{{ round_id }}/delete" onsubmit="return confirm('Slet runden?');" style="margin: 0;">
+        <button type="submit" class="danger-btn">Slet runde</button>
+    </form>
+</div>
+{% endblock %}

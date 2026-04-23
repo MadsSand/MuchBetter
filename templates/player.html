@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+
+{% block title %}{{ player[1] }}{% endblock %}
+
+{% block content %}
+<div class="card profile">
+    <div class="avatar">{{ player[1][0] }}</div>
+    <div>
+        <h1>{{ player[1] }}</h1>
+        <div class="muted">Spillerprofil og udvikling</div>
+    </div>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-box">
+        <div class="stat-label">Snit stableford</div>
+        <div class="stat-value">{{ player[3] if player[3] is not none else 0 }}</div>
+    </div>
+
+    <div class="stat-box">
+        <div class="stat-label">Bedste score</div>
+        <div class="stat-value">{{ player[4] if player[4] is not none else 0 }}</div>
+    </div>
+
+    <div class="stat-box">
+        <div class="stat-label">Sejre</div>
+        <div class="stat-value">{{ player[5] }}</div>
+    </div>
+
+    <div class="stat-box">
+        <div class="stat-label">Top 3</div>
+        <div class="stat-value">{{ player[6] }}</div>
+    </div>
+
+    <div class="stat-box">
+        <div class="stat-label">Spillede runder</div>
+        <div class="stat-value">{{ player[2] }}</div>
+    </div>
+
+    <div class="stat-box">
+        <div class="stat-label">Total point</div>
+        <div class="stat-value">{{ player[7] }}</div>
+    </div>
+
+    <div class="stat-box">
+        <div class="stat-label">Total fake money</div>
+        <div class="stat-value">{{ player[8] }}</div>
+    </div>
+</div>
+
+<div class="chart-card">
+    <h2>Placering pr. runde</h2>
+    {% if chart_labels %}
+        <canvas id="placementChart" height="160"></canvas>
+        <div class="muted" style="margin-top: 10px;">Graf over spillerens placering i hver runde.</div>
+    {% else %}
+        <div class="muted">Ingen runder endnu.</div>
+    {% endif %}
+</div>
+
+<div class="charts-grid">
+    <div class="chart-card">
+        <h2>Point</h2>
+        {% if chart_labels %}
+            <canvas id="pointsChart" height="200"></canvas>
+            <div class="muted" style="margin-top: 10px;">Klik på farverne for at vise eller skjule serier.</div>
+        {% else %}
+            <div class="muted">Ingen runder endnu.</div>
+        {% endif %}
+    </div>
+
+    <div class="chart-card">
+        <h2>Fake money</h2>
+        {% if chart_labels %}
+            <canvas id="moneyChart" height="200"></canvas>
+            <div class="muted" style="margin-top: 10px;">Klik på farverne for at vise eller skjule serier.</div>
+        {% else %}
+            <div class="muted">Ingen runder endnu.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <h2>Sidste 5 runder</h2>
+    <div class="table-wrap">
+        <table>
+            <tr>
+                <th>Dato</th>
+                <th>Bane</th>
+                <th>Stableford</th>
+                <th>Pos</th>
+                <th>Point</th>
+                <th>Money</th>
+            </tr>
+            {% for r in last_5_rounds %}
+            <tr>
+                <td><a class="round-link" href="/round/{{ r[0] }}">{{ r[1] }}</a></td>
+                <td>{{ r[2] }}</td>
+                <td>{{ r[3] }}</td>
+                <td>{{ r[4] }}</td>
+                <td>{{ r[5] }}</td>
+                <td>{{ r[6] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+
+{% if chart_labels %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const labels = {{ chart_labels|tojson }};
+    const positions = {{ chart_positions|tojson }};
+    const stableford = {{ chart_stableford|tojson }};
+    const roundPoints = {{ chart_round_points|tojson }};
+    const roundMoney = {{ chart_round_money|tojson }};
+    const runningPoints = {{ chart_running_points|tojson }};
+    const runningMoney = {{ chart_running_money|tojson }};
+
+    new Chart(document.getElementById("placementChart"), {
+        type: "line",
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: "Placering",
+                    data: positions,
+                    borderColor: "#dc2626",
+                    backgroundColor: "#dc2626",
+                    tension: 0.25,
+                    pointRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: {
+                mode: "index",
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    reverse: true,
+                    beginAtZero: false,
+                    ticks: {
+                        precision: 0,
+                        stepSize: 1
+                    },
+                    title: {
+                        display: true,
+                        text: "Placering"
+                    }
+                }
+            }
+        }
+    });
+
+    new Chart(document.getElementById("pointsChart"), {
+        type: "line",
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: "Point pr. runde",
+                    data: roundPoints,
+                    borderColor: "#2563eb",
+                    backgroundColor: "#2563eb",
+                    tension: 0.25,
+                    pointRadius: 4,
+                    hidden: false
+                },
+                {
+                    label: "Samlet point pr. runde",
+                    data: runningPoints,
+                    borderColor: "#F1F52C",
+                    backgroundColor: "#F1F52C",
+                    tension: 0.25,
+                    pointRadius: 4,
+                    hidden: false
+                },
+                {
+                    label: "Stableford",
+                    data: stableford,
+                    borderColor: "#7c3aed",
+                    backgroundColor: "#7c3aed",
+                    tension: 0.25,
+                    pointRadius: 4,
+                    hidden: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: {
+                mode: "index",
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: "top"
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: "Point"
+                    }
+                }
+            }
+        }
+    });
+
+    new Chart(document.getElementById("moneyChart"), {
+        type: "line",
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: "Fake money pr. runde",
+                    data: roundMoney,
+                    borderColor: "#059669",
+                    backgroundColor: "#059669",
+                    tension: 0.25,
+                    pointRadius: 4,
+                    hidden: false
+                },
+                {
+                    label: "Samlet fake money",
+                    data: runningMoney,
+                    borderColor: "#0CE4EB",
+                    backgroundColor: "#0CE4EB",
+                    tension: 0.25,
+                    pointRadius: 4,
+                    hidden: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: {
+                mode: "index",
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: "top"
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: "Fake money"
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endif %}
+{% endblock %}

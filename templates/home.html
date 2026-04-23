@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}MuchBetter Golf Liga{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>MuchBetter Golf Liga</h1>
+    <p>Overblik over runder, statistik og stilling.</p>
+
+    <div class="hero-actions">
+        <a href="/rounds" class="secondary-btn">Se alle runder</a>
+        <a href="/stats" class="secondary-btn">Se statistik</a>
+    </div>
+</div>
+
+<div class="grid">
+    <div class="card">
+        <div class="muted">Antal registrerede runder</div>
+        <div class="meta-number">{{ total_rounds }}</div>
+    </div>
+
+    <div class="card">
+        <h2>Seneste runde</h2>
+        {% if latest_round %}
+            <div class="list">
+                <div><b>Dato:</b> {{ latest_round[1] }}</div>
+                <div><b>Bane:</b> {{ latest_round[2] }}</div>
+                <div style="margin-top: 12px;">
+                    <a href="/round/{{ latest_round[0] }}" class="secondary-btn">Se resultat</a>
+                </div>
+            </div>
+        {% else %}
+            <div class="muted">Ingen runder endnu.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid">
+    <div class="card">
+        <h2>Top 3 – Point</h2>
+
+        {% if top_points %}
+            <div class="list">
+                {% for p in top_points %}
+                    <div class="list-row">
+                        <div>{{ p[3] }}. <a class="player-link" href="/player/{{ p[0] }}">{{ p[1] }}</a></div>
+                        <div class="value-wrap">
+                            <div>{{ p[2] }} point</div>
+
+                            {% if p[5] == "up" %}
+                                <span class="movement up">▲ {{ p[6] }}</span>
+                            {% elif p[5] == "down" %}
+                                <span class="movement down">▼ {{ p[6] }}</span>
+                            {% elif p[5] == "new" %}
+                                <span class="movement new">Ny</span>
+                            {% else %}
+                                <span class="movement same">–</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="muted">Ingen data endnu.</div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2>Top 3 – Fake money</h2>
+
+        {% if top_money %}
+            <div class="list">
+                {% for p in top_money %}
+                    <div class="list-row">
+                        <div>{{ p[3] }}. <a class="player-link" href="/player/{{ p[0] }}">{{ p[1] }}</a></div>
+                        <div class="value-wrap">
+                            <div>{{ p[2] }} kr</div>
+
+                            {% if p[5] == "up" %}
+                                <span class="movement up">▲ {{ p[6] }}</span>
+                            {% elif p[5] == "down" %}
+                                <span class="movement down">▼ {{ p[6] }}</span>
+                            {% elif p[5] == "new" %}
+                                <span class="movement new">Ny</span>
+                            {% else %}
+                                <span class="movement same">–</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="muted">Ingen data endnu.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="forum-box">
+    <h2>Forum</h2>
+    <div class="muted">
+        Her kommer der snart et lille forum
+    </div>
+    <div class="forum-tag">Kommer senere</div>
+</div>
+
+<div class="card">
+    <h2>Admin</h2>
+    <div class="muted">Administration af runder.</div>
+    <div style="margin-top: 12px;">
+        <a href="/new" class="secondary-btn">Opret ny runde</a>
+    </div>
+</div>
+{% endblock %}

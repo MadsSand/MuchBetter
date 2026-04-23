@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Runder{% endblock %}
+
+{% block content %}
+<h1>Runder</h1>
+
+{% for r in rounds %}
+    <div class="card">
+        <a class="round-link" href="/round/{{ r[0] }}">
+            {{ r[1] }} - {{ r[2] }}
+        </a>
+    </div>
+{% endfor %}
+{% endblock %}
