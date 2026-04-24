@@ -9,12 +9,32 @@
 <body>
     {% block page_shell %}
     <div class="container">
-        <div class="navbar">
-            <a href="/" class="{% if request.path == '/' %}active{% endif %}">Forside</a>
-            <a href="/rounds" class="{% if '/rounds' in request.path %}active{% endif %}">Runder</a>
-            <a href="/stats" class="{% if '/stats' in request.path %}active{% endif %}">Statistik</a>
-            <a href="/logout">Log ud</a>
-        </div>
+        <header class="topbar">
+            <a href="/" class="brand">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="MuchBetter Golf">
+            </a>
+
+            <form class="top-search" action="/stats" method="get">
+                <input type="search" name="q" placeholder="Søg spiller, runde..." aria-label="Søg">
+            </form>
+
+            <nav class="topnav">
+                <a href="/rounds" class="{% if '/rounds' in request.path %}active{% endif %}">
+                    <span class="nav-icon">☰</span>
+                    <span>Runder</span>
+                </a>
+
+                <a href="/stats" class="{% if '/stats' in request.path %}active{% endif %}">
+                    <span class="nav-icon">↗</span>
+                    <span>Statistik</span>
+                </a>
+
+                <a href="/logout">
+                    <span class="nav-icon">⌂</span>
+                    <span>Log ud</span>
+                </a>
+            </nav>
+        </header>
 
         {% block content %}{% endblock %}
     </div>
