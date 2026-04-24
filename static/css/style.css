@@ -528,3 +528,11 @@ canvas {
     max-width: 1400px;
     margin: 0 auto;
 }
+
+.container-wide > .card {
+    margin-bottom: 16px;
+}
+
+.card + .card {
+    margin-top: 16px;
+}
