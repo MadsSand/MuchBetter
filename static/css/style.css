@@ -350,6 +350,7 @@ button {
     grid-template-columns: 120px 1fr;
     gap: 18px;
     align-items: center;
+    margin-bottom: 16px;
 }
 
 .avatar {
@@ -645,4 +646,72 @@ canvas {
 .player-card {
     background: var(--surface);
     border: 1px solid var(--border);
+}
+@media (max-width: 760px) {
+    .topbar {
+        grid-template-columns: auto 1fr;
+        height: auto;
+        gap: 12px;
+        padding: 10px 12px;
+    }
+
+    .top-search {
+        order: 3;
+        grid-column: 1 / -1;
+    }
+
+    .topnav {
+        order: 2;
+        grid-column: 1 / -1;
+        justify-content: space-between;
+        gap: 0;
+    }
+
+    .topnav a {
+        flex: 1;
+        min-width: 0;
+    }
+}
+
+textarea,
+input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    font-size: 16px;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.forum-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+}
+
+.thread-title {
+    display: block;
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 800;
+    font-size: 18px;
+    margin-bottom: 8px;
+}
+
+.thread-title:hover {
+    text-decoration: underline;
+}
+
+.forum-post-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.forum-post-body {
+    line-height: 1.6;
+    white-space: pre-wrap;
 }

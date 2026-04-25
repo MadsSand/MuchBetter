@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Ny tråd{% endblock %}
+
+{% block content %}
+<h1>Ny tråd</h1>
+
+<div class="card">
+    <form method="post" action="/forum/new">
+        <div class="field">
+            <label for="title">Titel</label>
+            <input type="text" id="title" name="title" required>
+        </div>
+
+        <div class="field">
+            <label for="body">Indlæg</label>
+            <textarea id="body" name="body" rows="6" required></textarea>
+        </div>
+
+        <button type="submit">Opret tråd</button>
+    </form>
+</div>
+{% endblock %}

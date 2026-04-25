@@ -1,9 +1,10 @@
-from flask import Flask, render_template_string, request, redirect, session, url_for, render_template
+from flask import Flask, request, redirect, session, url_for, render_template, redirect
 import psycopg
 import os
 from functools import wraps
 from pathlib import Path
 from datetime import date
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 
@@ -30,12 +31,12 @@ def admin_required(view_func):
     @wraps(view_func)
     def wrapped_view(*args, **kwargs):
         if not session.get("is_admin"):
-            return redirect(url_for("login"))
+            return redirect(url_for("admin_login"))
         return view_func(*args, **kwargs)
     return wrapped_view
-@app.route("/login", methods=["GET", "POST"])
 
-def login():
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
     error = None
 
     if request.method == "POST":
@@ -43,13 +44,13 @@ def login():
 
         if password == ADMIN_PASSWORD:
             session["is_admin"] = True
+            session["logged_in"] = True
             next_url = request.args.get("next") or "/"
             return redirect(next_url)
         else:
             error = "Forkert kode"
 
-
-    return render_template("login.html", error=error)
+    return render_template("admin_login.html", error=error)
 
 @app.get("/logout")
 def logout():
@@ -1010,6 +1011,237 @@ def player_page(player_id):
         chart_running_money=chart_running_money,
     )
 
+def login_required(view_func):
+    @wraps(view_func)
+    def wrapped_view(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login", next=request.path))
+        return view_func(*args, **kwargs)
+    return wrapped_view
+
+@app.get("/forum")
+@login_required
+def forum():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                select
+                    t.id,
+                    t.title,
+                    t.created_at,
+                    count(p.id) as post_count,
+                    max(p.created_at) as latest_post
+                from forum_threads t
+                left join forum_posts p on p.thread_id = t.id
+                group by t.id, t.title, t.created_at
+                order by coalesce(max(p.created_at), t.created_at) desc;
+            """)
+            threads = cur.fetchall()
+
+    return render_template("forum.html", threads=threads)
+
+
+@app.get("/forum/new")
+@login_required
+def new_forum_thread():
+    return render_template("forum_new_thread.html")
+
+
+@app.post("/forum/new")
+@login_required
+def create_forum_thread():
+    title = request.form.get("title", "").strip()
+    body = request.form.get("body", "").strip()
+    user_id = session.get("user_id")
+
+    if not title or not body:
+        return redirect("/forum/new")
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                select username
+                from users
+                where id = %s;
+            """, (user_id,))
+            user = cur.fetchone()
+
+            if not user:
+                return redirect("/login")
+
+            author_name = user[0]
+
+            cur.execute("""
+                insert into forum_threads (title)
+                values (%s)
+                returning id;
+            """, (title,))
+            thread_id = cur.fetchone()[0]
+
+            cur.execute("""
+                insert into forum_posts (thread_id, user_id, author_name, body)
+                values (%s, %s, %s, %s);
+            """, (thread_id, user_id, author_name, body))
+
+        conn.commit()
+
+    return redirect(f"/forum/{thread_id}")
+
+
+@app.get("/forum/<int:thread_id>")
+@login_required
+def forum_thread(thread_id):
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                select id, title, created_at
+                from forum_threads
+                where id = %s;
+            """, (thread_id,))
+            thread = cur.fetchone()
+
+            if not thread:
+                return "Tråden blev ikke fundet", 404
+
+            cur.execute("""
+                select id, author_name, body, created_at
+                from forum_posts
+                where thread_id = %s
+                order by created_at asc;
+            """, (thread_id,))
+            posts = cur.fetchall()
+
+    return render_template("forum_thread.html", thread=thread, posts=posts)
+
+
+@app.post("/forum/<int:thread_id>/reply")
+@login_required
+def reply_forum_thread(thread_id):
+    user_id = session.get("user_id")
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                select username
+                from users
+                where id = %s;
+            """, (user_id,))
+            user = cur.fetchone()
+
+        if not user:
+            return redirect("/login")
+
+    author_name = user[0]
+
+    body = request.form.get("body", "").strip()
+
+    if not author_name or not body:
+        return redirect(f"/forum/{thread_id}")
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                insert into forum_posts (thread_id, author_name, body)
+                values (%s, %s, %s);
+            """, (thread_id, author_name, body))
+
+        conn.commit()
+
+    return redirect(f"/forum/{thread_id}")
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+
+        if not username or not password:
+            return render_template("register.html", error="Udfyld alle felter")
+
+        password_hash = generate_password_hash(password)
+
+        try:
+            with psycopg.connect(DB_URL) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        insert into users (username, password_hash, is_approved)
+                        values (%s, %s, true);
+                    """, (username, password_hash))
+                conn.commit()
+        except Exception:
+            return render_template("register.html", error="Brugernavn findes allerede")
+
+        return redirect("/login")
+
+    return render_template("register.html")
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+
+        with psycopg.connect(DB_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    select id, password_hash, is_admin, is_approved, player_id
+                    from users
+                    where username = %s;
+                """, (username,))
+                user = cur.fetchone()
+
+        if not user or not check_password_hash(user[1], password):
+            return render_template("login.html", error="Forkert login")
+
+
+        session["logged_in"] = True
+        session["user_id"] = user[0]
+        session["is_admin"] = user[2]
+        session["player_id"] = user[4]
+
+        next_url = request.args.get("next") or "/"
+        return redirect(next_url)
+
+    return render_template("login.html")
+
+@app.get("/admin/users")
+@admin_required
+def admin_users():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                select id, username, created_at
+                from users
+                where is_approved = false
+                order by created_at;
+            """)
+            users = cur.fetchall()
+
+    return render_template("admin_users.html", users=users)
+
+@app.post("/admin/users/<int:user_id>/approve")
+@admin_required
+def approve_user(user_id):
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                update users
+                set is_approved = true
+                where id = %s;
+            """, (user_id,))
+        conn.commit()
+
+    return redirect("/admin/users")
+
+@app.get("/me")
+@login_required
+def my_page():
+    player_id = session.get("player_id")
+
+    if not player_id:
+        return "Din bruger er ikke koblet til din side endnu", 403
+
+    return redirect(f"/player/{player_id}")
 
 app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SESSION_COOKIE_HTTPONLY"] = True

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Ret runde{% endblock %}
+
+{% block content %}
+<h1>Ret runde</h1>
+
+<div class="card">
+    <form method="post" action="/round/{{ round_row[0] }}/edit">
+
+        <div class="field">
+            <label>Dato</label>
+            <input type="date" name="round_date" value="{{ round_row[1] }}">
+        </div>
+
+        <div class="field">
+            <label>Bane</label>
+            <select name="course_id">
+                {% for c in courses %}
+                    <option value="{{ c[0] }}" {% if c[0] == round_row[2] %}selected{% endif %}>
+                        {{ c[1] }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="field checkbox-row">
+            <input type="checkbox" name="closest_active"
+                   {% if round_row[3] %}checked{% endif %}>
+            <label>Closest to pin aktiv</label>
+        </div>
+
+        <h2>Spillere</h2>
+
+        {% for p in player_rows %}
+        <div class="player-card">
+            <div class="player-name">{{ p[1] }}</div>
+
+            <input type="hidden" name="player_{{ p[0] }}">
+
+            <div class="player-grid">
+
+                <div>
+                    <label>Stableford</label>
+                    <input type="number"
+                           name="stableford_{{ p[0] }}"
+                           value="{{ p[2] if p[2] else '' }}">
+                </div>
+
+                {% if round_row[3] %}
+                <div>
+                    <label>Closest (cm)</label>
+                    <input type="number"
+                           name="closest_{{ p[0] }}"
+                           value="{{ p[3] if p[3] else '' }}">
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+        {% endfor %}
+
+        <button type="submit">Gem ændringer</button>
+    </form>
+</div>
+{% endblock %}

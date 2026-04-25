@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Godkend brugere{% endblock %}
+
+{% block content %}
+<h1>Godkend brugere</h1>
+
+{% if users %}
+    {% for user in users %}
+        <div class="card">
+            <p><strong>{{ user[1] }}</strong></p>
+            <p class="muted">Oprettet: {{ user[2] }}</p>
+
+            <form method="post" action="/admin/users/{{ user[0] }}/approve">
+                <button type="submit">Godkend bruger</button>
+            </form>
+        </div>
+    {% endfor %}
+{% else %}
+    <div class="card">
+        <p>Ingen brugere afventer godkendelse.</p>
+    </div>
+{% endif %}
+{% endblock %}

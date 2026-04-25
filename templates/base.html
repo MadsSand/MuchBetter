@@ -18,21 +18,45 @@
                 <input type="search" name="q" placeholder="Søg spiller, runde..." aria-label="Søg">
             </form>
 
+
             <nav class="topnav">
                 <a href="/rounds" class="{% if '/rounds' in request.path %}active{% endif %}">
                     <span class="nav-icon">☰</span>
                     <span>Runder</span>
                 </a>
 
+
+                <a href="/me" class="{% if request.path == '/me' %}active{% endif %}">
+                    <span class="nav-icon">👤</span>
+                    <span>Min side</span>
+                </a>
+
+
                 <a href="/stats" class="{% if '/stats' in request.path %}active{% endif %}">
                     <span class="nav-icon">↗</span>
                     <span>Statistik</span>
                 </a>
 
-                <a href="/logout">
-                    <span class="nav-icon">⌂</span>
-                    <span>Log ud</span>
+                <a href="/forum" class="{% if '/forum' in request.path %}active{% endif %}">
+                    <span class="nav-icon">💬</span>
+                    <span>Forum</span>
                 </a>
+
+                {% if session.logged_in %}
+                    <span style="font-size:12px;">{{ session.user_id }}</span>
+                {% endif %}
+
+                {% if session.logged_in %}
+                    <a href="/logout">
+                        <span class="nav-icon">⌂</span>
+                        <span>Log ud</span>
+                    </a>
+                {% else %}
+                    <a href="/login">
+                        <span class="nav-icon">⌂</span>
+                        <span>Log ind</span>
+                    </a>
+                {% endif %}
             </nav>
         </header>
 

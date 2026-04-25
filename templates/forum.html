@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Forum{% endblock %}
+
+{% block content %}
+<div class="forum-header">
+    <h1>Forum</h1>
+    <a href="/forum/new" class="button-link">Ny tråd</a>
+</div>
+
+{% if threads %}
+    {% for t in threads %}
+        <div class="card">
+            <a href="/forum/{{ t[0] }}" class="thread-title">{{ t[1] }}</a>
+            <p class="muted">
+                {{ t[3] }} indlæg · Seneste aktivitet: {{ t[4] if t[4] else t[2] }}
+            </p>
+        </div>
+    {% endfor %}
+{% else %}
+    <div class="card">
+        <p>Der er ingen tråde endnu.</p>
+    </div>
+{% endif %}
+{% endblock %}

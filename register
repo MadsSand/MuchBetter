@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Login{% endblock %}
+{% block title %}Opret bruger{% endblock %}
 
 {% block content %}
 <div class="login-wrap">
     <div class="card login-card">
-        <h1>Log ind</h1>
+        <h1>Opret bruger</h1>
 
         {% if error %}
             <div class="error">{{ error }}</div>
@@ -18,12 +18,10 @@
             <label for="password">Kode</label>
             <input type="password" id="password" name="password" required>
 
-            <p class="muted">
-                Har du ikke en bruger? <a href="/register">Opret her</a>
-            </p>
-
-            <button type="submit">Log ind</button>
+            <button type="submit">Opret</button>
         </form>
+
+        <p class="muted">Du skal godkendes af admin før login virker</p>
     </div>
 </div>
 {% endblock %}
