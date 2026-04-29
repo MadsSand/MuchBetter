@@ -1072,12 +1072,13 @@ def create_forum_thread():
             author_name = user[0]
 
             cur.execute("""
-                insert into forum_threads (title)
-                values (%s)
+                insert into forum_threads (user_id, title)
+                values (%s, %s)
                 returning id;
-            """, (title,))
+            """, (user_id, title))
             thread_id = cur.fetchone()[0]
 
+            
             cur.execute("""
                 insert into forum_posts (thread_id, user_id, author_name, body)
                 values (%s, %s, %s, %s);
