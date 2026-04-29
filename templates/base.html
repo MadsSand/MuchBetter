@@ -8,7 +8,7 @@
 </head>
 <body>
     {% block page_shell %}
-    <div class="container">
+    <div class="{% block container_class %}container{% endblock %}">
         <header class="topbar">
             <a href="/" class="brand">
                 <img src="{{ url_for('static', filename='img/logo.png') }}" alt="MuchBetter Golf">
@@ -41,6 +41,13 @@
                     <span class="nav-icon">💬</span>
                     <span>Forum</span>
                 </a>
+
+                {% if session.is_admin %}
+                    <a href="/admin/users">
+                        <span class="nav-icon">⚙</span>
+                        <span>Admin</span>
+                    </a>
+                {% endif %}
 
                 {% if session.logged_in %}
                     <span style="font-size:12px;">{{ session.user_id }}</span>
