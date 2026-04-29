@@ -1141,9 +1141,9 @@ def reply_forum_thread(thread_id):
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                insert into forum_posts (thread_id, author_name, body)
-                values (%s, %s, %s);
-            """, (thread_id, author_name, body))
+                insert into forum_posts (thread_id, user_id, author_name, body)
+                values (%s, %s, %s, %s);
+            """, (thread_id, user_id, author_name, body))
 
         conn.commit()
 
