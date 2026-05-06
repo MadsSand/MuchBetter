@@ -62,28 +62,37 @@
             {% for r in player_stats %}
             <tr>
                 <td>{{ loop.index }}</td>
-                <td><a class="player-link" href="/player/{{ r[0] }}">{{ r[1] }}</a></td>
-                <td>{{ r[2] }}</td>
-                <td>{{ r[3] if r[3] is not none else "" }}</td>
-                <td>{{ r[4] if r[4] is not none else "" }}</td>
-                <td>{{ r[5] }}</td>
-                <td>{{ r[6] }}</td>
-                <td>{{ r[7] if r[7] is not none else 0 }}</td>
                 <td>
-                    {% if r[9] > 0 %}
-                        <span class="change up">▲ {{ r[9] }}</span>
-                    {% elif r[9] < 0 %}
-                        <span class="change down">▼ {{ -r[9] }}</span>
-                    {% else %}
-                        <span class="change same">–</span>
-                    {% endif %}
+                    <div class="players-list-name">
+                        {% if r[2] %}
+                            <img class="mini-avatar" src="/player/{{ r[0] }}/avatar" alt="Avatar for {{ r[1] }}">
+                        {% else %}
+                            <span class="mini-avatar-fallback">{{ r[1][0] }}</span>
+                        {% endif %}
+                        <a class="player-link" href="/player/{{ r[0] }}">{{ r[1] }}</a>
+                    </div>
                 </td>
+                <td>{{ r[3] }}</td>
+                <td>{{ r[4] if r[4] is not none else "" }}</td>
+                <td>{{ r[5] if r[5] is not none else "" }}</td>
+                <td>{{ r[6] }}</td>
+                <td>{{ r[7] }}</td>
                 <td>{{ r[8] if r[8] is not none else 0 }}</td>
                 <td>
                     {% if r[10] > 0 %}
                         <span class="change up">▲ {{ r[10] }}</span>
                     {% elif r[10] < 0 %}
                         <span class="change down">▼ {{ -r[10] }}</span>
+                    {% else %}
+                        <span class="change same">–</span>
+                    {% endif %}
+                </td>
+                <td>{{ r[9] if r[9] is not none else 0 }}</td>
+                <td>
+                    {% if r[11] > 0 %}
+                        <span class="change up">▲ {{ r[11] }}</span>
+                    {% elif r[11] < 0 %}
+                        <span class="change down">▼ {{ -r[11] }}</span>
                     {% else %}
                         <span class="change same">–</span>
                     {% endif %}

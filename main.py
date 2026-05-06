@@ -144,6 +144,7 @@ def home():
                     select
                         p.id as player_id,
                         p.full_name,
+                        p.avatar_data is not null as has_avatar,
                         coalesce(sum(rp.season_points), 0) as total_points
                     from players p
                     left join round_players rp
@@ -153,7 +154,7 @@ def home():
                     cross join latest_round_cte lr
                     where p.is_active = true
                     and (r.season_year = lr.season_year or r.id is null)
-                    group by p.id, p.full_name
+                    group by p.id, p.full_name, p.avatar_data
                 ),
                 previous_totals as (
                     select
@@ -183,6 +184,7 @@ def home():
                     select
                         player_id,
                         full_name,
+                        has_avatar,
                         total_points,
                         rank() over (order by total_points desc, full_name) as current_rank
                     from current_totals
@@ -197,6 +199,7 @@ def home():
                 select
                     rc.player_id,
                     rc.full_name,
+                    rc.has_avatar,
                     rc.total_points,
                     rc.current_rank,
                     rp.previous_rank,
@@ -229,6 +232,7 @@ def home():
                     select
                         p.id as player_id,
                         p.full_name,
+                        p.avatar_data is not null as has_avatar,
                         coalesce(sum(rp.money_rank), 0) as total_money
                     from players p
                     left join round_players rp
@@ -238,7 +242,7 @@ def home():
                     cross join latest_round_cte lr
                     where p.is_active = true
                     and (r.season_year = lr.season_year or r.id is null)
-                    group by p.id, p.full_name
+                    group by p.id, p.full_name, p.avatar_data
                 ),
                 previous_totals as (
                     select
@@ -268,6 +272,7 @@ def home():
                     select
                         player_id,
                         full_name,
+                        has_avatar,
                         total_money,
                         rank() over (order by total_money desc, full_name) as current_rank
                     from current_totals
@@ -282,6 +287,7 @@ def home():
                 select
                     rc.player_id,
                     rc.full_name,
+                    rc.has_avatar,
                     rc.total_money,
                     rc.current_rank,
                     rp.previous_rank,
@@ -829,6 +835,7 @@ def stats():
         select
             p.id,
             p.full_name,
+            p.avatar_data is not null as has_avatar,
             count(*) filter (where rp.status = 'played') as rounds_played,
             round(avg(rp.stableford_points) filter (where rp.status = 'played'), 2) as avg_stableford,
             max(rp.stableford_points) as best_stableford,
@@ -852,6 +859,7 @@ def stats():
         group by
             p.id,
             p.full_name,
+            p.avatar_data,
             ct.total_points,
             ct.total_money,
             pt.prev_points,
@@ -1279,10 +1287,18 @@ def forum_thread(thread_id):
                 return "Tråden blev ikke fundet", 404
 
             cur.execute("""
-                select id, author_name, body, created_at
-                from forum_posts
-                where thread_id = %s
-                order by created_at asc;
+                select
+                    fp.id,
+                    fp.author_name,
+                    fp.body,
+                    fp.created_at,
+                    u.player_id,
+                    coalesce(p.avatar_data is not null, false) as has_avatar
+                from forum_posts fp
+                left join users u on u.id = fp.user_id
+                left join players p on p.id = u.player_id
+                where fp.thread_id = %s
+                order by fp.created_at asc;
             """, (thread_id,))
             posts = cur.fetchall()
 

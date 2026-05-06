@@ -372,23 +372,40 @@ button {
 }
 
 .avatar-upload-form {
-    margin-top: 14px;
+    margin-top: 10px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    max-width: 420px;
+    gap: 6px;
+    max-width: 360px;
+}
+
+.avatar-upload-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .avatar-upload-form input[type="file"] {
+    min-width: 0;
+    flex: 1;
     background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 8px;
+    border-radius: 8px;
+    padding: 6px 8px;
     color: var(--text);
+    font-size: 13px;
 }
 
 .avatar-upload-form button {
     width: auto;
+    padding: 8px 12px;
+    font-size: 13px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+
+.avatar-help {
+    font-size: 12px;
 }
 
 .players-list-name {

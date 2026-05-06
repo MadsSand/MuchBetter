@@ -43,15 +43,23 @@
             <div class="list">
                 {% for p in top_points %}
                     <div class="list-row">
-                        <div>{{ p[3] }}. <a class="player-link" href="/player/{{ p[0] }}">{{ p[1] }}</a></div>
+                        <div class="players-list-name">
+                            {% if p[2] %}
+                                <img class="mini-avatar" src="/player/{{ p[0] }}/avatar" alt="Avatar for {{ p[1] }}">
+                            {% else %}
+                                <span class="mini-avatar-fallback">{{ p[1][0] }}</span>
+                            {% endif %}
+                            <span>{{ p[4] }}.</span>
+                            <a class="player-link" href="/player/{{ p[0] }}">{{ p[1] }}</a>
+                        </div>
                         <div class="value-wrap">
-                            <div>{{ p[2] }} point</div>
+                            <div>{{ p[3] }} point</div>
 
-                            {% if p[5] == "up" %}
-                                <span class="movement up">▲ {{ p[6] }}</span>
-                            {% elif p[5] == "down" %}
-                                <span class="movement down">▼ {{ p[6] }}</span>
-                            {% elif p[5] == "new" %}
+                            {% if p[6] == "up" %}
+                                <span class="movement up">▲ {{ p[7] }}</span>
+                            {% elif p[6] == "down" %}
+                                <span class="movement down">▼ {{ p[7] }}</span>
+                            {% elif p[6] == "new" %}
                                 <span class="movement new">Ny</span>
                             {% else %}
                                 <span class="movement same">–</span>
@@ -72,15 +80,23 @@
             <div class="list">
                 {% for p in top_money %}
                     <div class="list-row">
-                        <div>{{ p[3] }}. <a class="player-link" href="/player/{{ p[0] }}">{{ p[1] }}</a></div>
+                        <div class="players-list-name">
+                            {% if p[2] %}
+                                <img class="mini-avatar" src="/player/{{ p[0] }}/avatar" alt="Avatar for {{ p[1] }}">
+                            {% else %}
+                                <span class="mini-avatar-fallback">{{ p[1][0] }}</span>
+                            {% endif %}
+                            <span>{{ p[4] }}.</span>
+                            <a class="player-link" href="/player/{{ p[0] }}">{{ p[1] }}</a>
+                        </div>
                         <div class="value-wrap">
-                            <div>{{ p[2] }} kr</div>
+                            <div>{{ p[3] }} kr</div>
 
-                            {% if p[5] == "up" %}
-                                <span class="movement up">▲ {{ p[6] }}</span>
-                            {% elif p[5] == "down" %}
-                                <span class="movement down">▼ {{ p[6] }}</span>
-                            {% elif p[5] == "new" %}
+                            {% if p[6] == "up" %}
+                                <span class="movement up">▲ {{ p[7] }}</span>
+                            {% elif p[6] == "down" %}
+                                <span class="movement down">▼ {{ p[7] }}</span>
+                            {% elif p[6] == "new" %}
                                 <span class="movement new">Ny</span>
                             {% else %}
                                 <span class="movement same">–</span>
@@ -99,7 +115,7 @@
     <h2>Forum</h2>
 
     <div class="muted">
-        Diskuter runder, resultater, øl, turneringer og alt andet relateret til MuchBetter Golf Ligaen.
+        Diskuter runder, resultater, øl, turneringer, afbud og alt andet af interesse.
     </div>
 
     <a href="/forum" class="button-link" style="margin-top: 10px; display: inline-block;">

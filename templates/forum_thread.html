@@ -12,7 +12,14 @@
 {% for p in posts %}
     <div class="card forum-post">
         <div class="forum-post-meta">
-            <strong>{{ p[1] }}</strong>
+            <div class="players-list-name">
+                {% if p[4] and p[5] %}
+                    <img class="mini-avatar" src="/player/{{ p[4] }}/avatar" alt="Avatar for {{ p[1] }}">
+                {% else %}
+                    <span class="mini-avatar-fallback">{{ p[1][0] if p[1] else "?" }}</span>
+                {% endif %}
+                <strong>{{ p[1] }}</strong>
+            </div>
             <span class="muted">{{ p[3] }}</span>
         </div>
         <div class="forum-post-body">{{ p[2] }}</div>
