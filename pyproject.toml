@@ -10,4 +10,5 @@ dependencies = [
     "psycopg[binary]",
     "python-dotenv",
     "gunicorn",
+    "Pillow",
 ]

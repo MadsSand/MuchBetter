@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Spillere{% endblock %}
+
+{% block content %}
+<h1>Spillere</h1>
+
+<div class="card">
+    <div class="muted">Alle aktive spillere i gruppen.</div>
+    <div class="list" style="margin-top: 12px;">
+        {% for player in players %}
+            <div class="list-row">
+                <div class="players-list-name">
+                    {% if player[2] %}
+                        <img class="mini-avatar" src="/player/{{ player[0] }}/avatar" alt="Avatar for {{ player[1] }}">
+                    {% else %}
+                        <span class="mini-avatar-fallback">{{ player[1][0] }}</span>
+                    {% endif %}
+                    <a class="player-link" href="/player/{{ player[0] }}">{{ player[1] }}</a>
+                </div>
+                <div><a class="player-link muted" href="/player/{{ player[0] }}">Profil</a></div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

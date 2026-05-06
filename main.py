@@ -1,9 +1,11 @@
-from flask import Flask, request, redirect, session, url_for, render_template, redirect
+from flask import Flask, request, redirect, session, url_for, render_template, redirect, send_file
 import psycopg
 import os
+import io
 from functools import wraps
 from pathlib import Path
 from datetime import date
+from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
@@ -27,6 +29,63 @@ if not SECRET_KEY:
 
 app.config["SECRET_KEY"] = SECRET_KEY
 
+
+def ensure_avatar_columns():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                alter table players
+                add column if not exists avatar_data bytea;
+                """
+            )
+            cur.execute(
+                """
+                alter table players
+                add column if not exists avatar_mime_type text;
+                """
+            )
+        conn.commit()
+
+
+ensure_avatar_columns()
+
+
+def compress_avatar_image(raw_bytes: bytes) -> tuple[bytes, str]:
+    try:
+        with Image.open(io.BytesIO(raw_bytes)) as img:
+            img = ImageOps.exif_transpose(img)
+            img.thumbnail((512, 512))
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGBA")
+
+            compressed = io.BytesIO()
+            quality = 82
+            while quality >= 55:
+                compressed.seek(0)
+                compressed.truncate(0)
+                img.save(
+                    compressed,
+                    format="WEBP",
+                    quality=quality,
+                    method=6,
+                )
+                if compressed.tell() <= 700 * 1024:
+                    break
+                quality -= 7
+
+            return compressed.getvalue(), "image/webp"
+    except UnidentifiedImageError:
+        raise ValueError("Filen er ikke et gyldigt billede")
+
+
+@app.context_processor
+def inject_layout_context():
+    online_users = []
+    if session.get("logged_in") and session.get("username"):
+        online_users.append(session["username"])
+    return {"online_users": online_users}
+
 def admin_required(view_func):
     @wraps(view_func)
     def wrapped_view(*args, **kwargs):
@@ -45,6 +104,7 @@ def admin_login():
         if password == ADMIN_PASSWORD:
             session["is_admin"] = True
             session["logged_in"] = True
+            session["username"] = "Admin"
             next_url = request.args.get("next") or "/"
             return redirect(next_url)
         else:
@@ -811,6 +871,26 @@ def stats():
         direction=direction,
     )
 
+
+@app.get("/players")
+def players():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select
+                    id,
+                    full_name,
+                    avatar_data is not null as has_avatar
+                from players
+                where is_active = true
+                order by full_name;
+                """
+            )
+            player_rows = cur.fetchall()
+
+    return render_template("players.html", players=player_rows)
+
 @app.get("/health")
 def health():
     return {"ok": True}, 200
@@ -833,13 +913,14 @@ def player_page(player_id):
                         and rp.position is not null
                     ) as top3,
                     coalesce(sum(rp.season_points), 0) as total_points,
-                    coalesce(sum(rp.money_rank), 0) as total_money
+                    coalesce(sum(rp.money_rank), 0) as total_money,
+                    p.avatar_data is not null as has_avatar
                 from players p
                 left join round_players rp
                     on rp.player_id = p.id
                 where p.id = %s
                   and p.is_active = true
-                group by p.id, p.full_name;
+                group by p.id, p.full_name, p.avatar_data;
                 """,
                 (player_id,)
             )
@@ -1001,6 +1082,7 @@ def player_page(player_id):
     return render_template(
         "player.html",
         player=player,
+        can_edit_player_avatar=can_edit_player(player_id),
         last_5_rounds=last_5_rounds,
         chart_labels=chart_labels,
         chart_positions=chart_positions,
@@ -1011,6 +1093,92 @@ def player_page(player_id):
         chart_running_money=chart_running_money,
     )
 
+
+@app.get("/player/<int:player_id>/avatar")
+def player_avatar(player_id):
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select avatar_data, avatar_mime_type
+                from players
+                where id = %s
+                and is_active = true;
+                """,
+                (player_id,)
+            )
+            row = cur.fetchone()
+
+    if not row or not row[0]:
+        return "Avatar ikke fundet", 404
+
+    avatar_data, mime_type = row
+    safe_mime = mime_type if mime_type else "image/png"
+    return send_file(
+        io.BytesIO(avatar_data),
+        mimetype=safe_mime,
+        as_attachment=False,
+        download_name=f"player-{player_id}-avatar"
+    )
+
+
+@app.post("/player/<int:player_id>/avatar")
+def upload_player_avatar(player_id):
+    if not session.get("logged_in"):
+        return redirect(url_for("login", next=f"/player/{player_id}"))
+
+    if not can_edit_player(player_id):
+        return "Du har ikke adgang til at redigere dette profilbillede", 403
+
+    avatar = request.files.get("avatar")
+    if not avatar or not avatar.filename:
+        return redirect(f"/player/{player_id}")
+
+    avatar_bytes = avatar.read()
+    if not avatar_bytes:
+        return redirect(f"/player/{player_id}")
+
+    max_size_bytes = 2 * 1024 * 1024
+    if len(avatar_bytes) > max_size_bytes:
+        return "Billedet er for stort (maks 2 MB)", 400
+
+    allowed_mimes = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    mime_type = avatar.mimetype or "application/octet-stream"
+    if mime_type not in allowed_mimes:
+        return "Kun JPG, PNG, WEBP eller GIF er tilladt", 400
+
+    try:
+        compressed_avatar_bytes, compressed_mime_type = compress_avatar_image(avatar_bytes)
+    except ValueError as err:
+        return str(err), 400
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            # Clear old avatar explicitly before storing the new one.
+            cur.execute(
+                """
+                update players
+                set avatar_data = null,
+                    avatar_mime_type = null
+                where id = %s
+                and is_active = true;
+                """,
+                (player_id,)
+            )
+            cur.execute(
+                """
+                update players
+                set avatar_data = %s,
+                    avatar_mime_type = %s
+                where id = %s
+                and is_active = true;
+                """,
+                (compressed_avatar_bytes, compressed_mime_type, player_id)
+            )
+        conn.commit()
+
+    return redirect(f"/player/{player_id}")
+
 def login_required(view_func):
     @wraps(view_func)
     def wrapped_view(*args, **kwargs):
@@ -1018,6 +1186,12 @@ def login_required(view_func):
             return redirect(url_for("login", next=request.path))
         return view_func(*args, **kwargs)
     return wrapped_view
+
+
+def can_edit_player(player_id: int) -> bool:
+    if session.get("is_admin"):
+        return True
+    return session.get("player_id") == player_id
 
 @app.get("/forum")
 @login_required
@@ -1199,6 +1373,7 @@ def login():
         session["user_id"] = user[0]
         session["is_admin"] = user[2]
         session["player_id"] = user[4]
+        session["username"] = username
 
         next_url = request.args.get("next") or "/"
         return redirect(next_url)

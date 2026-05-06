@@ -4,10 +4,21 @@
 
 {% block content %}
 <div class="card profile">
-    <div class="avatar">{{ player[1][0] }}</div>
+    {% if player[9] %}
+        <img class="avatar avatar-img" src="/player/{{ player[0] }}/avatar" alt="Avatar for {{ player[1] }}">
+    {% else %}
+        <div class="avatar">{{ player[1][0] }}</div>
+    {% endif %}
     <div>
         <h1>{{ player[1] }}</h1>
         <div class="muted">Spillerprofil og udvikling</div>
+        {% if can_edit_player_avatar %}
+            <form action="/player/{{ player[0] }}/avatar" method="post" enctype="multipart/form-data" class="avatar-upload-form">
+                <label for="avatar" class="muted">Skift profilbillede (JPG, PNG, WEBP, GIF, maks 2 MB)</label>
+                <input id="avatar" type="file" name="avatar" accept="image/jpeg,image/png,image/webp,image/gif" required>
+                <button type="submit">Upload billede</button>
+            </form>
+        {% endif %}
     </div>
 </div>
 

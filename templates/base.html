@@ -8,67 +8,91 @@
 </head>
 <body>
     {% block page_shell %}
-    <div class="{% block container_class %}container{% endblock %}">
+    <div class="app-shell">
         <header class="topbar">
-            <a href="/" class="brand">
-                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="MuchBetter Golf">
-            </a>
-
-            <form class="top-search" action="/stats" method="get">
-                <input type="search" name="q" placeholder="Søg spiller, runde..." aria-label="Søg">
-            </form>
-
+            <div class="topbar-left">
+                <a href="/" class="brand">
+                    <img src="{{ url_for('static', filename='img/logo.png') }}" alt="MuchBetter Golf logo">
+                </a>
+            </div>
 
             <nav class="topnav">
-                <a href="/rounds" class="{% if '/rounds' in request.path %}active{% endif %}">
-                    <span class="nav-icon">☰</span>
-                    <span>Runder</span>
+                <a href="/" class="{% if request.path == '/' %}active{% endif %}">
+                    <span class="topnav-icon">⌂</span>
+                    <span>Forside</span>
                 </a>
-
-
                 <a href="/me" class="{% if request.path == '/me' %}active{% endif %}">
-                    <span class="nav-icon">👤</span>
+                    <span class="topnav-icon">👤</span>
                     <span>Min side</span>
                 </a>
-
-
-                <a href="/stats" class="{% if '/stats' in request.path %}active{% endif %}">
-                    <span class="nav-icon">↗</span>
-                    <span>Statistik</span>
+                <a href="/rounds" class="{% if '/rounds' in request.path %}active{% endif %}">
+                    <span class="topnav-icon">🏌</span>
+                    <span>Runder</span>
                 </a>
-
-                <a href="/forum" class="{% if '/forum' in request.path %}active{% endif %}">
-                    <span class="nav-icon">💬</span>
-                    <span>Forum</span>
-                </a>
-
-                {% if session.is_admin %}
-                    <a href="/admin/users">
-                        <span class="nav-icon">⚙</span>
-                        <span>Admin</span>
-                    </a>
-                {% endif %}
-
-                {% if session.logged_in %}
-                    <span style="font-size:12px;">{{ session.user_id }}</span>
-                {% endif %}
-
-                {% if session.logged_in %}
-                    <a href="/logout">
-                        <span class="nav-icon">⌂</span>
-                        <span>Log ud</span>
-                    </a>
-                {% else %}
-                    <a href="/login">
-                        <span class="nav-icon">⌂</span>
-                        <span>Log ind</span>
-                    </a>
-                {% endif %}
             </nav>
+
+            <div class="topbar-actions">
+                {% if session.logged_in %}
+                    <a href="/logout" class="top-action-link">Log ud</a>
+                {% else %}
+                    <a href="/login" class="top-action-link">Login</a>
+                {% endif %}
+                <button class="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false">
+                    Menu
+                </button>
+            </div>
         </header>
 
-        {% block content %}{% endblock %}
+        <div class="layout-shell">
+            <aside id="sidebar" class="sidebar">
+                <nav class="sidebar-nav">
+                    <a href="/stats" class="sidebar-link {% if '/stats' in request.path %}active{% endif %}">
+                        <span class="sidebar-icon">↗</span>
+                        <span>Statistik</span>
+                    </a>
+                    <a href="/forum" class="sidebar-link {% if '/forum' in request.path %}active{% endif %}">
+                        <span class="sidebar-icon">💬</span>
+                        <span>Forum</span>
+                    </a>
+                    <a href="/players" class="sidebar-link {% if '/players' in request.path %}active{% endif %}">
+                        <span class="sidebar-icon">👥</span>
+                        <span>Spillere</span>
+                    </a>
+                </nav>
+
+                <section class="online-card">
+                    <h3>Who is online</h3>
+                    {% if online_users %}
+                        <ul class="online-list">
+                            {% for user in online_users %}
+                                <li>{{ user }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="muted">Ingen online lige nu</p>
+                    {% endif %}
+                </section>
+            </aside>
+
+            <main class="main-content">
+                <div class="{% block container_class %}container{% endblock %}">
+                    {% block content %}{% endblock %}
+                </div>
+            </main>
+        </div>
     </div>
     {% endblock %}
+    <script>
+        (function () {
+            const toggle = document.querySelector(".sidebar-toggle");
+            const sidebar = document.querySelector(".sidebar");
+            if (!toggle || !sidebar) return;
+
+            toggle.addEventListener("click", function () {
+                const isOpen = sidebar.classList.toggle("open");
+                toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            });
+        })();
+    </script>
 </body>
 </html>
