@@ -11,8 +11,15 @@
             <p><strong>{{ user[1] }}</strong></p>
             <p class="muted">Oprettet: {{ user[2] }}</p>
 
-            <form method="post" action="/admin/users/{{ user[0] }}/approve">
-                <button type="submit">Godkend bruger</button>
+            <form method="post" action="{{ url_for('approve_user', user_id=user[0]) }}" class="admin-pending-form admin-pending-form--page">
+                <label class="admin-pending-label" for="player-pick-page-{{ user[0] }}">Kæd til spiller (valgfrit)</label>
+                <select name="player_id" id="player-pick-page-{{ user[0] }}" class="admin-pending-select">
+                    <option value="">— Ingen (godkend kun) —</option>
+                    {% for p in admin_players %}
+                    <option value="{{ p[0] }}">{{ p[1] }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="admin-pending-btn">Godkend</button>
             </form>
         </div>
     {% endfor %}

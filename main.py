@@ -4,6 +4,7 @@ import os
 import io
 from functools import wraps
 from pathlib import Path
+from urllib.parse import urlparse
 from datetime import date
 from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -51,6 +52,18 @@ def ensure_avatar_columns():
 ensure_avatar_columns()
 
 
+def redirect_after_admin_action():
+    """Redirect to referrer only when it matches this host (avoid open redirects)."""
+    fallback = url_for("admin_users")
+    ref = request.referrer
+    if not ref:
+        return redirect(fallback)
+    parts = urlparse(ref)
+    if parts.scheme in ("http", "https") and parts.netloc and parts.netloc != request.host:
+        return redirect(fallback)
+    return redirect(ref)
+
+
 def compress_avatar_image(raw_bytes: bytes) -> tuple[bytes, str]:
     try:
         with Image.open(io.BytesIO(raw_bytes)) as img:
@@ -84,7 +97,25 @@ def inject_layout_context():
     online_users = []
     if session.get("logged_in") and session.get("username"):
         online_users.append(session["username"])
-    return {"online_users": online_users}
+    ctx = {"online_users": online_users, "admin_pending_users": [], "admin_players": []}
+    if session.get("is_admin"):
+        with psycopg.connect(DB_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    select id, username, created_at
+                    from users
+                    where is_approved = false
+                    order by created_at;
+                """)
+                ctx["admin_pending_users"] = cur.fetchall()
+                cur.execute("""
+                    select id, full_name
+                    from players
+                    where is_active = true
+                    order by full_name;
+                """)
+                ctx["admin_players"] = cur.fetchall()
+    return ctx
 
 def admin_required(view_func):
     @wraps(view_func)
@@ -1356,7 +1387,7 @@ def register():
                 with conn.cursor() as cur:
                     cur.execute("""
                         insert into users (username, password_hash, is_approved)
-                        values (%s, %s, true);
+                        values (%s, %s, false);
                     """, (username, password_hash))
                 conn.commit()
         except Exception:
@@ -1384,6 +1415,11 @@ def login():
         if not user or not check_password_hash(user[1], password):
             return render_template("login.html", error="Forkert login")
 
+        if not user[3]:
+            return render_template(
+                "login.html",
+                error="Din konto afventer stadig godkendelse fra en administrator.",
+            )
 
         session["logged_in"] = True
         session["user_id"] = user[0]
@@ -1408,22 +1444,54 @@ def admin_users():
                 order by created_at;
             """)
             users = cur.fetchall()
+            cur.execute("""
+                select id, full_name
+                from players
+                where is_active = true
+                order by full_name;
+            """)
+            admin_players = cur.fetchall()
 
-    return render_template("admin_users.html", users=users)
+    return render_template("admin_users.html", users=users, admin_players=admin_players)
 
 @app.post("/admin/users/<int:user_id>/approve")
 @admin_required
 def approve_user(user_id):
+    player_raw = request.form.get("player_id", "").strip()
+    candidate = None
+    if player_raw:
+        try:
+            candidate = int(player_raw)
+        except ValueError:
+            candidate = None
+
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
-            cur.execute("""
-                update users
-                set is_approved = true
-                where id = %s;
-            """, (user_id,))
+            resolved_player_id = None
+            if candidate is not None:
+                cur.execute("select 1 from players where id = %s;", (candidate,))
+                if cur.fetchone():
+                    resolved_player_id = candidate
+
+            if resolved_player_id is not None:
+                cur.execute(
+                    """
+                    update users
+                    set is_approved = true,
+                        player_id = %s
+                    where id = %s;
+                    """,
+                    (resolved_player_id, user_id),
+                )
+            else:
+                cur.execute("""
+                    update users
+                    set is_approved = true
+                    where id = %s;
+                """, (user_id,))
         conn.commit()
 
-    return redirect("/admin/users")
+    return redirect_after_admin_action()
 
 @app.get("/me")
 @login_required
