@@ -109,6 +109,250 @@ body {
     margin-top: 20px;
 }
 
+/* --- Upcoming events (forside) --- */
+.upcoming-events {
+    position: relative;
+    border-radius: 18px;
+    margin-bottom: 16px;
+    overflow: visible;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    min-height: 200px;
+}
+
+.upcoming-events__photo {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    z-index: 0;
+    border-radius: 18px;
+}
+
+.upcoming-events__edge-fade {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    border-radius: 18px;
+    box-shadow:
+        inset 0 0 0 1px rgba(0, 0, 0, 0.12),
+        inset 0 0 36px 22px var(--bg),
+        inset 0 0 72px 40px rgba(11, 15, 13, 0.55);
+}
+
+.upcoming-events__inner {
+    position: relative;
+    z-index: 2;
+    padding: 22px 24px 24px;
+    background: linear-gradient(
+        105deg,
+        rgba(11, 15, 13, 0.94) 0%,
+        rgba(11, 15, 13, 0.82) 38%,
+        rgba(11, 15, 13, 0.62) 100%
+    );
+}
+
+.upcoming-events--no-photo .upcoming-events__inner {
+    background: var(--surface);
+}
+
+.upcoming-events__title {
+    margin: 0 0 18px 0;
+    font-size: 26px;
+    letter-spacing: 0.02em;
+}
+
+.upcoming-events__layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.upcoming-events__calendar-col {
+    display: flex;
+    justify-content: center;
+    padding-right: 20px;
+    padding-left: 8px;
+}
+
+@media (min-width: 760px) {
+    .upcoming-events__layout {
+        flex-direction: row;
+        align-items: stretch;
+        gap: 28px;
+    }
+
+    .upcoming-events__list-col {
+        flex: 0 0 34%;
+        max-width: 340px;
+    }
+
+    .upcoming-events__calendar-col {
+        flex: 1 1 auto;
+        min-width: 280px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: clamp(16px, 4vw, 36px);
+        padding-left: 0;
+    }
+}
+
+.upcoming-events__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.upcoming-events__item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.upcoming-events--no-photo .upcoming-events__item {
+    border-bottom-color: var(--border);
+}
+
+.upcoming-events__item:last-child {
+    border-bottom: none;
+}
+
+.upcoming-events__item-date {
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.upcoming-events__item-title {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.upcoming-events__item--emphasis .upcoming-events__item-title {
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.upcoming-events__item--empty {
+    border: none;
+    padding: 8px 0;
+}
+
+.stationary-cal {
+    width: 100%;
+    max-width: 340px;
+    min-width: 260px;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.stationary-cal__nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.stationary-cal__title {
+    flex: 1;
+    text-align: center;
+    font-weight: 800;
+    font-size: 15px;
+}
+
+.stationary-cal__btn {
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(0, 0, 0, 0.28);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    padding: 0;
+}
+
+.stationary-cal__btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.upcoming-events--no-photo .stationary-cal__btn {
+    background: var(--surface-2);
+    border-color: var(--border);
+}
+
+/* Undgå globale table { min-width: 640px } / td-regler som klipper minikalenderen */
+.stationary-cal__grid {
+    width: 100%;
+    min-width: 0 !important;
+    max-width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    background: transparent !important;
+    table-layout: fixed;
+}
+
+.stationary-cal__grid th {
+    padding: 6px 1px !important;
+    text-align: center;
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: lowercase;
+    background: transparent !important;
+    border: none !important;
+    white-space: normal !important;
+}
+
+.stationary-cal__grid th,
+.stationary-cal__grid td {
+    text-align: center !important;
+}
+
+.stationary-cal__grid td {
+    border: none !important;
+    padding: 6px 1px !important;
+    white-space: normal !important;
+}
+
+.stationary-cal__day {
+    border-radius: 8px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.stationary-cal__day--empty {
+    background: transparent;
+}
+
+.stationary-cal__day--event {
+    background: rgba(127, 176, 105, 0.38);
+    color: #f0fff0;
+    box-shadow: inset 0 0 0 1px rgba(127, 176, 105, 0.55);
+}
+
+.stationary-cal__day--next {
+    box-shadow: inset 0 0 0 2px rgba(200, 255, 200, 0.95);
+    background: rgba(127, 176, 105, 0.55);
+    font-weight: 800;
+}
+
+.field-checkbox label {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
 .primary-btn,
 .secondary-btn {
     display: inline-block;

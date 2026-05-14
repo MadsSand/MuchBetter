@@ -1,11 +1,12 @@
 from flask import Flask, request, redirect, session, url_for, render_template, redirect, send_file
+import hashlib
 import psycopg
 import os
 import io
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlparse
-from datetime import date
+from datetime import date, timedelta
 from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -58,6 +59,158 @@ def ensure_player_profile_columns():
 ensure_player_profile_columns()
 
 
+def ensure_upcoming_events_table():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                create table if not exists upcoming_events (
+                    id serial primary key,
+                    title text not null,
+                    event_date date not null,
+                    emphasis boolean not null default false,
+                    course_image_data bytea,
+                    course_image_mime_type text,
+                    created_at timestamptz not null default now()
+                );
+                """
+            )
+        conn.commit()
+
+
+ensure_upcoming_events_table()
+
+
+def ensure_course_hero_assets():
+    """Delte hero-billeder (én blob pr. unikt indhold) — mindre DB og ingen duplikat-upload."""
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                create table if not exists course_hero_assets (
+                    id serial primary key,
+                    content_sha256 char(64) not null unique,
+                    image_data bytea not null,
+                    image_mime_type text not null,
+                    byte_size int not null,
+                    created_at timestamptz not null default now()
+                );
+                """
+            )
+            cur.execute(
+                """
+                alter table upcoming_events
+                add column if not exists hero_asset_id integer references course_hero_assets(id) on delete set null;
+                """
+            )
+        conn.commit()
+
+
+def backfill_inline_hero_images_to_assets():
+    """Flyt gamle course_image_data til course_hero_assets og dedupliker på hash."""
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select id, course_image_data, course_image_mime_type
+                from upcoming_events
+                where course_image_data is not null
+                  and hero_asset_id is null;
+                """
+            )
+            rows = cur.fetchall()
+            for event_id, data, mime in rows:
+                if not data:
+                    continue
+                digest = hashlib.sha256(data).hexdigest()
+                cur.execute(
+                    "select id from course_hero_assets where content_sha256 = %s;",
+                    (digest,),
+                )
+                found = cur.fetchone()
+                if found:
+                    asset_id = found[0]
+                else:
+                    cur.execute(
+                        """
+                        insert into course_hero_assets (
+                            content_sha256, image_data, image_mime_type, byte_size
+                        )
+                        values (%s, %s, %s, %s)
+                        returning id;
+                        """,
+                        (digest, data, mime or "image/webp", len(data)),
+                    )
+                    asset_id = cur.fetchone()[0]
+                cur.execute(
+                    """
+                    update upcoming_events
+                    set hero_asset_id = %s,
+                        course_image_data = null,
+                        course_image_mime_type = null
+                    where id = %s;
+                    """,
+                    (asset_id, event_id),
+                )
+        conn.commit()
+
+
+ensure_course_hero_assets()
+backfill_inline_hero_images_to_assets()
+
+
+def get_or_create_course_hero_asset(cur, image_bytes: bytes, mime: str) -> int:
+    digest = hashlib.sha256(image_bytes).hexdigest()
+    cur.execute(
+        "select id from course_hero_assets where content_sha256 = %s;",
+        (digest,),
+    )
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    cur.execute(
+        """
+        insert into course_hero_assets (
+            content_sha256, image_data, image_mime_type, byte_size
+        )
+        values (%s, %s, %s, %s)
+        returning id;
+        """,
+        (digest, image_bytes, mime, len(image_bytes)),
+    )
+    return cur.fetchone()[0]
+
+
+def delete_orphan_course_hero_assets(cur):
+    cur.execute(
+        """
+        delete from course_hero_assets a
+        where not exists (
+            select 1 from upcoming_events e where e.hero_asset_id = a.id
+        );
+        """
+    )
+
+
+MONTH_NAMES_DA = (
+    "",
+    "januar",
+    "februar",
+    "marts",
+    "april",
+    "maj",
+    "juni",
+    "juli",
+    "august",
+    "september",
+    "oktober",
+    "november",
+    "december",
+)
+
+WEEKDAY_SHORT_DA = ("ma", "ti", "on", "to", "fr", "lø", "sø")
+
+
 def parse_last_known_handicap_form(raw: str) -> tuple[float | None, str | None]:
     """Return (db_value or None to clear, error_message)."""
     s = (raw or "").strip()
@@ -67,9 +220,9 @@ def parse_last_known_handicap_form(raw: str) -> tuple[float | None, str | None]:
     try:
         v = float(normalized)
     except ValueError:
-        return None, "Indtast et tal."
+        return None, "Indtast et tal (fx 18,4)."
     if v < -15 or v > 60:
-        return None, "Handicap skal ligge i normalt interval."
+        return None, "Handicap skal ligge i et fornuftigt interval."
     return round(v, 1), None
 
 
@@ -113,6 +266,36 @@ def compress_avatar_image(raw_bytes: bytes) -> tuple[bytes, str]:
                 if compressed.tell() <= 700 * 1024:
                     break
                 quality -= 7
+
+            return compressed.getvalue(), "image/webp"
+    except UnidentifiedImageError:
+        raise ValueError("Filen er ikke et gyldigt billede")
+
+
+def compress_course_hero_image(raw_bytes: bytes) -> tuple[bytes, str]:
+    """Hero-baggrund: WebP, begrænset opløsning og filstørrelse (passer til CSS-cover)."""
+    try:
+        with Image.open(io.BytesIO(raw_bytes)) as img:
+            img = ImageOps.exif_transpose(img)
+            img.thumbnail((1280, 720))
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGBA")
+
+            compressed = io.BytesIO()
+            quality = 78
+            max_bytes = 420 * 1024
+            while quality >= 45:
+                compressed.seek(0)
+                compressed.truncate(0)
+                img.save(
+                    compressed,
+                    format="WEBP",
+                    quality=quality,
+                    method=6,
+                )
+                if compressed.tell() <= max_bytes:
+                    break
+                quality -= 6
 
             return compressed.getvalue(), "image/webp"
     except UnidentifiedImageError:
@@ -389,6 +572,64 @@ def home():
             """)
             total_rounds = cur.fetchone()[0]
 
+            cur.execute(
+                """
+                select id, title, event_date, emphasis,
+                       course_image_data is not null as has_course_image
+                from upcoming_events
+                where event_date >= %s
+                order by event_date asc, id asc;
+                """,
+                (date.today() - timedelta(days=400),),
+            )
+            upcoming_for_calendar = cur.fetchall()
+
+            cur.execute(
+                """
+                select id, title, event_date, emphasis
+                from upcoming_events
+                where event_date >= current_date
+                order by event_date asc, id asc
+                limit 3;
+                """
+            )
+            upcoming_next_three = cur.fetchall()
+
+            cur.execute(
+                """
+                select ue.id
+                from upcoming_events ue
+                left join course_hero_assets cha on cha.id = ue.hero_asset_id
+                where ue.event_date >= current_date
+                  and (
+                      cha.image_data is not null
+                      or ue.course_image_data is not null
+                  )
+                order by ue.event_date asc, ue.id asc
+                limit 1;
+                """
+            )
+            bg_row = cur.fetchone()
+            upcoming_bg_event_id = bg_row[0] if bg_row else None
+
+    cal_events = [
+        {"y": r[2].year, "m": r[2].month, "d": r[2].day, "t": r[1]}
+        for r in upcoming_for_calendar
+        if r[2] is not None
+    ]
+    next_event_key = None
+    today_d = date.today()
+    for r in upcoming_for_calendar:
+        if r[2] is not None and r[2] >= today_d:
+            next_event_key = f"{r[2].year}-{r[2].month}-{r[2].day}"
+            break
+
+    upcoming_cal_json = {
+        "events": cal_events,
+        "nextEventKey": next_event_key,
+        "months": list(MONTH_NAMES_DA[1:]),
+        "weekdays": list(WEEKDAY_SHORT_DA),
+    }
 
     return render_template(
         "home.html",
@@ -396,6 +637,9 @@ def home():
         top_points=top_points,
         top_money=top_money,
         total_rounds=total_rounds,
+        upcoming_next_three=upcoming_next_three,
+        upcoming_bg_event_id=upcoming_bg_event_id,
+        upcoming_cal_json=upcoming_cal_json,
     )
 
 @app.get("/new")
@@ -1573,6 +1817,151 @@ def approve_user(user_id):
         conn.commit()
 
     return redirect_after_admin_action()
+
+
+@app.get("/upcoming-events/<int:event_id>/course-image")
+def upcoming_event_course_image(event_id):
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select a.image_data, a.image_mime_type,
+                       ue.course_image_data, ue.course_image_mime_type
+                from upcoming_events ue
+                left join course_hero_assets a on a.id = ue.hero_asset_id
+                where ue.id = %s;
+                """,
+                (event_id,),
+            )
+            row = cur.fetchone()
+
+    if not row:
+        return "Billede ikke fundet", 404
+    asset_data, asset_mime, legacy_data, legacy_mime = row
+    if asset_data:
+        data, mime = asset_data, asset_mime
+    elif legacy_data:
+        data, mime = legacy_data, legacy_mime
+    else:
+        return "Billede ikke fundet", 404
+
+    safe_mime = mime if mime else "image/webp"
+    return send_file(
+        io.BytesIO(data),
+        mimetype=safe_mime,
+        as_attachment=False,
+        download_name=f"event-{event_id}-course",
+    )
+
+
+@app.get("/admin/events")
+@admin_required
+def admin_events():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select
+                    ue.id,
+                    ue.title,
+                    ue.event_date,
+                    ue.emphasis,
+                    (ue.hero_asset_id is not null or ue.course_image_data is not null) as has_image
+                from upcoming_events ue
+                order by ue.event_date asc, ue.id asc;
+                """
+            )
+            events = cur.fetchall()
+            cur.execute(
+                """
+                select
+                    a.id,
+                    a.byte_size,
+                    a.content_sha256,
+                    (select count(*)::int from upcoming_events e where e.hero_asset_id = a.id) as ref_count
+                from course_hero_assets a
+                order by a.id desc
+                limit 50;
+                """
+            )
+            hero_assets = cur.fetchall()
+
+    return render_template("admin_events.html", events=events, hero_assets=hero_assets)
+
+
+@app.post("/admin/events/add")
+@admin_required
+def admin_events_add():
+    title = (request.form.get("title") or "").strip()
+    date_raw = (request.form.get("event_date") or "").strip()
+    emphasis = request.form.get("emphasis") == "on"
+    reuse_raw = (request.form.get("reuse_hero_asset_id") or "").strip()
+
+    if not title or not date_raw:
+        return redirect(url_for("admin_events"))
+
+    try:
+        event_date = date.fromisoformat(date_raw)
+    except ValueError:
+        return redirect(url_for("admin_events"))
+
+    hero_asset_id = None
+    image_file = request.files.get("course_image")
+    if image_file and image_file.filename:
+        raw = image_file.read()
+        if raw and len(raw) <= 8 * 1024 * 1024:
+            try:
+                image_bytes, mime_store = compress_course_hero_image(raw)
+            except ValueError:
+                return redirect(url_for("admin_events"))
+            with psycopg.connect(DB_URL) as conn:
+                with conn.cursor() as cur:
+                    hero_asset_id = get_or_create_course_hero_asset(cur, image_bytes, mime_store)
+                conn.commit()
+
+    if hero_asset_id is None and reuse_raw:
+        try:
+            candidate = int(reuse_raw)
+        except ValueError:
+            candidate = None
+        if candidate is not None:
+            with psycopg.connect(DB_URL) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "select id from course_hero_assets where id = %s;",
+                        (candidate,),
+                    )
+                    if cur.fetchone():
+                        hero_asset_id = candidate
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into upcoming_events (
+                    title, event_date, emphasis,
+                    course_image_data, course_image_mime_type, hero_asset_id
+                )
+                values (%s, %s, %s, null, null, %s);
+                """,
+                (title, event_date, emphasis, hero_asset_id),
+            )
+        conn.commit()
+
+    return redirect(url_for("admin_events"))
+
+
+@app.post("/admin/events/<int:event_id>/delete")
+@admin_required
+def admin_events_delete(event_id):
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("delete from upcoming_events where id = %s;", (event_id,))
+            delete_orphan_course_hero_assets(cur)
+        conn.commit()
+
+    return redirect(url_for("admin_events"))
+
 
 @app.get("/me")
 @login_required

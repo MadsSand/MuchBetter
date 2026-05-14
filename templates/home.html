@@ -13,27 +13,128 @@
     </div>
 </div>
 
-<div class="grid">
-    <div class="card">
-        <div class="muted">Antal registrerede runder</div>
-        <div class="meta-number">{{ total_rounds }}</div>
-    </div>
-
-    <div class="card">
-        <h2>Seneste runde</h2>
-        {% if latest_round %}
-            <div class="list">
-                <div><b>Dato:</b> {{ latest_round[1] }}</div>
-                <div><b>Bane:</b> {{ latest_round[2] }}</div>
-                <div style="margin-top: 12px;">
-                    <a href="/round/{{ latest_round[0] }}" class="secondary-btn">Se resultat</a>
-                </div>
+<section class="upcoming-events {% if upcoming_bg_event_id %}upcoming-events--has-photo{% else %}upcoming-events--no-photo{% endif %}">
+    {% if upcoming_bg_event_id %}
+    <div class="upcoming-events__photo" style="background-image: url('{{ url_for('upcoming_event_course_image', event_id=upcoming_bg_event_id) }}');" role="presentation"></div>
+    <div class="upcoming-events__edge-fade" aria-hidden="true"></div>
+    {% endif %}
+    <div class="upcoming-events__inner">
+        <h2 class="upcoming-events__title">Kommende Begivenheder</h2>
+        <div class="upcoming-events__layout">
+            <div class="upcoming-events__list-col">
+                <ul class="upcoming-events__list">
+                    {% if upcoming_next_three %}
+                        {% for ev in upcoming_next_three %}
+                        <li class="upcoming-events__item{% if ev[3] %} upcoming-events__item--emphasis{% endif %}">
+                            <span class="upcoming-events__item-date">{{ ev[2].strftime('%d.%m.%Y') }}</span>
+                            <span class="upcoming-events__item-title">{{ ev[1] }}</span>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                        <li class="upcoming-events__item upcoming-events__item--empty muted">Ingen planlagte events</li>
+                    {% endif %}
+                </ul>
             </div>
-        {% else %}
-            <div class="muted">Ingen runder endnu.</div>
-        {% endif %}
+            <div class="upcoming-events__calendar-col">
+                <div class="stationary-cal" id="upcoming-stationary-cal">
+                    <div class="stationary-cal__nav">
+                        <button type="button" class="stationary-cal__btn" id="upcoming-cal-prev" aria-label="Forrige måned">◀</button>
+                        <span class="stationary-cal__title" id="upcoming-cal-title"></span>
+                        <button type="button" class="stationary-cal__btn" id="upcoming-cal-next" aria-label="Næste måned">▶</button>
+                    </div>
+                    <table class="stationary-cal__grid">
+                        <thead>
+                            <tr id="upcoming-cal-weekdays"></tr>
+                        </thead>
+                        <tbody id="upcoming-cal-body"></tbody>
+                    </table>
+                </div>
+                <script type="application/json" id="upcoming-cal-data">{{ upcoming_cal_json|tojson }}</script>
+                <script>
+                (function () {
+                    var elData = document.getElementById("upcoming-cal-data");
+                    if (!elData) return;
+                    var data = { events: [], months: [], weekdays: [] };
+                    try { data = JSON.parse(elData.textContent); } catch (e) {}
+                    var months = data.months || [];
+                    var weekdays = data.weekdays || [];
+                    var titlesByKey = new Map();
+                    (data.events || []).forEach(function (ev) {
+                        var k = ev.y + "-" + ev.m + "-" + ev.d;
+                        if (!titlesByKey.has(k)) titlesByKey.set(k, []);
+                        titlesByKey.get(k).push(ev.t);
+                    });
+                    var nextEventKey = data.nextEventKey || null;
+                    var now = new Date();
+                    var y = now.getFullYear();
+                    var m = now.getMonth() + 1;
+                    var titleEl = document.getElementById("upcoming-cal-title");
+                    var bodyEl = document.getElementById("upcoming-cal-body");
+                    var headRow = document.getElementById("upcoming-cal-weekdays");
+                    if (!titleEl || !bodyEl || !headRow) return;
+                    weekdays.forEach(function (w) {
+                        var th = document.createElement("th");
+                        th.textContent = w;
+                        headRow.appendChild(th);
+                    });
+                    function monthCells(year, month) {
+                        var first = new Date(year, month - 1, 1);
+                        var lastDay = new Date(year, month, 0).getDate();
+                        var pad = (first.getDay() + 6) % 7;
+                        var cells = [];
+                        var i;
+                        for (i = 0; i < pad; i++) cells.push(null);
+                        for (i = 1; i <= lastDay; i++) cells.push(i);
+                        while (cells.length % 7 !== 0) cells.push(null);
+                        return cells;
+                    }
+                    function render() {
+                        titleEl.textContent = (months[m - 1] || "") + " " + y;
+                        var cells = monthCells(y, m);
+                        bodyEl.innerHTML = "";
+                        for (var r = 0; r < cells.length; r += 7) {
+                            var tr = document.createElement("tr");
+                            for (var c = 0; c < 7; c++) {
+                                var d = cells[r + c];
+                                var td = document.createElement("td");
+                                if (d == null) {
+                                    td.className = "stationary-cal__day stationary-cal__day--empty";
+                                } else {
+                                    var k = y + "-" + m + "-" + d;
+                                    td.className = "stationary-cal__day";
+                                    td.textContent = d;
+                                    if (titlesByKey.has(k)) {
+                                        td.className += " stationary-cal__day--event";
+                                        td.title = titlesByKey.get(k).join(" · ");
+                                    }
+                                    if (nextEventKey && k === nextEventKey) {
+                                        td.className += " stationary-cal__day--next";
+                                    }
+                                }
+                                tr.appendChild(td);
+                            }
+                            bodyEl.appendChild(tr);
+                        }
+                    }
+                    function prevMonth() {
+                        if (m === 1) { y -= 1; m = 12; } else { m -= 1; }
+                        render();
+                    }
+                    function nextMonth() {
+                        if (m === 12) { y += 1; m = 1; } else { m += 1; }
+                        render();
+                    }
+                    var btnPrev = document.getElementById("upcoming-cal-prev");
+                    var btnNext = document.getElementById("upcoming-cal-next");
+                    if (btnPrev) btnPrev.addEventListener("click", prevMonth);
+                    if (btnNext) btnNext.addEventListener("click", nextMonth);
+                    render();
+                })();
+                </script>
+            </div>
+        </div>
     </div>
-</div>
+</section>
 
 <div class="grid">
     <div class="card">
@@ -107,6 +208,28 @@
             </div>
         {% else %}
             <div class="muted">Ingen data endnu.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid">
+    <div class="card">
+        <div class="muted">Antal registrerede runder</div>
+        <div class="meta-number">{{ total_rounds }}</div>
+    </div>
+
+    <div class="card">
+        <h2>Seneste runde</h2>
+        {% if latest_round %}
+            <div class="list">
+                <div><b>Dato:</b> {{ latest_round[1] }}</div>
+                <div><b>Bane:</b> {{ latest_round[2] }}</div>
+                <div style="margin-top: 12px;">
+                    <a href="/round/{{ latest_round[0] }}" class="secondary-btn">Se resultat</a>
+                </div>
+            </div>
+        {% else %}
+            <div class="muted">Ingen runder endnu.</div>
         {% endif %}
     </div>
 </div>

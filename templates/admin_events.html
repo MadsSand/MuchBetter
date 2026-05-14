@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Kommende events{% endblock %}
+
+{% block content %}
+<p class="muted" style="margin-bottom: 16px;"><a href="{{ url_for('admin_users') }}">← Tilbage til godkend brugere</a></p>
+
+<h1>Kommende events</h1>
+<p class="muted">Disse events vises på forsiden. Baggrundsbilledet er fra den næste kommende event med billede. Billeder gemmes som <strong>WebP max ~1280×720</strong> og <strong>samles i én kopi pr. identisk fil</strong> (efter komprimering). Vælg et eksisterende billede nedenfor for at undgå at uploade samme bane igen.</p>
+
+<div class="card" style="margin-top: 16px;">
+    <h2>Tilføj event</h2>
+    <form method="post" action="{{ url_for('admin_events_add') }}" enctype="multipart/form-data" class="settings-form" style="max-width: 520px;">
+        <div class="field">
+            <label for="title">Navn / titel</label>
+            <input id="title" type="text" name="title" required maxlength="200" placeholder="fx Runde på HimmerLand">
+        </div>
+        <div class="field">
+            <label for="event_date">Dato</label>
+            <input id="event_date" type="date" name="event_date" required>
+        </div>
+        <div class="field field-checkbox">
+            <label>
+                <input type="checkbox" name="emphasis" value="on">
+                Fremhæv (større og fed skrift på forsiden)
+            </label>
+        </div>
+        <div class="field">
+            <label for="reuse_hero_asset_id">Genbrug banebillede (valgfrit)</label>
+            <select id="reuse_hero_asset_id" name="reuse_hero_asset_id">
+                <option value="">— Ingen / upload nyt nedenfor —</option>
+                {% for a in hero_assets %}
+                <option value="{{ a[0] }}">#{{ a[0] }} · {{ (a[1] / 1024)|int }} KB · bruges {{ a[3] }}× · {{ a[2][:10] }}…</option>
+                {% endfor %}
+            </select>
+            <div class="muted" style="margin-top: 6px; font-size: 13px;">Hvis du uploader en fil samtidig, bruges <strong>uploaden</strong> (samme fil som før genbruges automatisk i databasen).</div>
+        </div>
+        <div class="field">
+            <label for="course_image">Nyt banebillede (valgfrit)</label>
+            <input id="course_image" type="file" name="course_image" accept="image/jpeg,image/png,image/webp,image/gif">
+            <div class="muted" style="margin-top: 6px; font-size: 13px;">JPG/PNG/WEBP/GIF · komprimeres til WebP (samme billede = ingen ekstra lagring).</div>
+        </div>
+        <button type="submit">Tilføj event</button>
+    </form>
+</div>
+
+<div class="card" style="margin-top: 16px;">
+    <h2>Eksisterende events</h2>
+    {% if events %}
+        <div class="table-wrap">
+            <table>
+                <tr>
+                    <th>Dato</th>
+                    <th>Titel</th>
+                    <th>Fremhævet</th>
+                    <th>Billede</th>
+                    <th></th>
+                </tr>
+                {% for e in events %}
+                <tr>
+                    <td>{{ e[2].strftime("%d.%m.%Y") }}</td>
+                    <td>{{ e[1] }}</td>
+                    <td>{% if e[3] %}Ja{% else %}Nej{% endif %}</td>
+                    <td>{% if e[4] %}Ja{% else %}Nej{% endif %}</td>
+                    <td>
+                        <form method="post" action="{{ url_for('admin_events_delete', event_id=e[0]) }}" onsubmit="return confirm('Slet dette event?');" style="display:inline;">
+                            <button type="submit" class="danger-btn" style="padding: 8px 12px; font-size: 13px;">Slet</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    {% else %}
+        <p class="muted">Ingen events endnu.</p>
+    {% endif %}
+</div>
+{% endblock %}
