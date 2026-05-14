@@ -442,6 +442,39 @@ button {
     margin: 0 0 8px 0;
 }
 
+.profile-handicap-line {
+    margin: 10px 0 0 0;
+    font-size: 15px;
+}
+
+.profile-edit-links {
+    margin: 10px 0 0 0;
+    font-size: 14px;
+}
+
+.profile-edit-links a {
+    font-weight: 600;
+}
+
+.settings-card h2 {
+    margin-top: 0;
+}
+
+.settings-form {
+    margin-top: 16px;
+    max-width: 420px;
+}
+
+.settings-form .field {
+    margin-bottom: 14px;
+}
+
+.settings-form-error {
+    color: #fca5a5;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+}
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -580,6 +613,48 @@ canvas {
     gap: 12px;
     flex-wrap: wrap;
     align-items: end;
+}
+
+table.stats-table {
+    min-width: 720px;
+}
+
+th.th-sortable {
+    vertical-align: bottom;
+}
+
+.th-sort-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.th-sort-arrows {
+    display: inline-flex;
+    flex-direction: column;
+    line-height: 1;
+    gap: 1px;
+}
+
+.sort-arrow {
+    display: block;
+    font-size: 10px;
+    text-decoration: none;
+    color: var(--muted);
+    padding: 1px 2px;
+    border-radius: 4px;
+    line-height: 1;
+}
+
+.sort-arrow:hover {
+    color: var(--text);
+    background: var(--surface);
+}
+
+.sort-arrow.is-active {
+    color: var(--text);
+    font-weight: 800;
 }
 
 

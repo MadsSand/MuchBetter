@@ -3,7 +3,7 @@
 {% block title %}{{ player[1] }}{% endblock %}
 
 {% block content %}
-<div class="card profile">
+<div class="card profile" id="profil">
     {% if player[9] %}
         <img class="avatar avatar-img" src="/player/{{ player[0] }}/avatar" alt="Avatar for {{ player[1] }}">
     {% else %}
@@ -12,14 +12,20 @@
     <div>
         <h1>{{ player[1] }}</h1>
         <div class="muted">Spillerprofil og udvikling</div>
-        {% if can_edit_player_avatar %}
-            <form action="/player/{{ player[0] }}/avatar" method="post" enctype="multipart/form-data" class="avatar-upload-form">
-                <div class="avatar-upload-row">
-                    <input id="avatar" type="file" name="avatar" accept="image/jpeg,image/png,image/webp,image/gif" required>
-                    <button type="submit">Skift billede</button>
-                </div>
-                <div class="muted avatar-help">JPG/PNG/WEBP/GIF, maks 2 MB</div>
-            </form>
+        <p class="profile-handicap-line">
+            Sidste kendte HCP:
+            {% if handicap_display %}
+                <strong>{{ handicap_display }}</strong>
+            {% else %}
+                <span class="muted">Ikke angivet</span>
+            {% endif %}
+        </p>
+        {% if can_edit_player_profile %}
+            <p class="profile-edit-links">
+                <a href="{{ url_for('player_settings', player_id=player[0]) }}#billede">Skift billede</a>
+                <span class="muted">·</span>
+                <a href="{{ url_for('player_settings', player_id=player[0]) }}#hcp">Opdater HCP</a>
+            </p>
         {% endif %}
     </div>
 </div>

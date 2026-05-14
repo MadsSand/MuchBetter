@@ -31,7 +31,7 @@ if not SECRET_KEY:
 app.config["SECRET_KEY"] = SECRET_KEY
 
 
-def ensure_avatar_columns():
+def ensure_player_profile_columns():
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -46,10 +46,37 @@ def ensure_avatar_columns():
                 add column if not exists avatar_mime_type text;
                 """
             )
+            cur.execute(
+                """
+                alter table players
+                add column if not exists last_known_handicap numeric(6, 2);
+                """
+            )
         conn.commit()
 
 
-ensure_avatar_columns()
+ensure_player_profile_columns()
+
+
+def parse_last_known_handicap_form(raw: str) -> tuple[float | None, str | None]:
+    """Return (db_value or None to clear, error_message)."""
+    s = (raw or "").strip()
+    if not s:
+        return None, None
+    normalized = s.replace(",", ".").replace(" ", "")
+    try:
+        v = float(normalized)
+    except ValueError:
+        return None, "Indtast et tal."
+    if v < -15 or v > 60:
+        return None, "Handicap skal ligge i normalt interval."
+    return round(v, 1), None
+
+
+def format_handicap_dk(value) -> str | None:
+    if value is None:
+        return None
+    return f"{float(value):.1f}".replace(".", ",")
 
 
 def redirect_after_admin_action():
@@ -116,6 +143,22 @@ def inject_layout_context():
                 """)
                 ctx["admin_players"] = cur.fetchall()
     return ctx
+
+
+def login_required(view_func):
+    @wraps(view_func)
+    def wrapped_view(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login", next=request.path))
+        return view_func(*args, **kwargs)
+    return wrapped_view
+
+
+def can_edit_player(player_id: int) -> bool:
+    if session.get("is_admin"):
+        return True
+    return session.get("player_id") == player_id
+
 
 def admin_required(view_func):
     @wraps(view_func)
@@ -800,7 +843,7 @@ def stats():
         "wins": "wins",
         "top3": "top3",
         "total_points": "total_points",
-        "total_money": "total_money",
+        "points_change": "(coalesce(ct.total_points, 0) - coalesce(pt.prev_points, 0))",
     }
 
     allowed_directions = {"asc", "desc"}
@@ -818,8 +861,7 @@ def stats():
         current_totals as (
             select
                 p.id as player_id,
-                coalesce(sum(case when r.season_year = lr.season_year then rp.season_points else 0 end), 0) as total_points,
-                coalesce(sum(case when r.season_year = lr.season_year then rp.money_rank else 0 end), 0) as total_money
+                coalesce(sum(case when r.season_year = lr.season_year then rp.season_points else 0 end), 0) as total_points
             from players p
             left join round_players rp
                 on rp.player_id = p.id
@@ -842,18 +884,7 @@ def stats():
                         then rp.season_points
                         else 0
                     end
-                ), 0) as prev_points,
-                coalesce(sum(
-                    case
-                        when r.season_year = lr.season_year
-                        and (
-                            r.round_date < lr.round_date
-                            or (r.round_date = lr.round_date and r.id < lr.id)
-                        )
-                        then rp.money_rank
-                        else 0
-                    end
-                ), 0) as prev_money
+                ), 0) as prev_points
             from players p
             left join round_players rp
                 on rp.player_id = p.id
@@ -876,9 +907,7 @@ def stats():
                 and rp.position is not null
             ) as top3,
             coalesce(sum(rp.season_points), 0) as total_points,
-            coalesce(sum(rp.money_rank), 0) as total_money,
-            coalesce(ct.total_points, 0) - coalesce(pt.prev_points, 0) as points_change,
-            coalesce(ct.total_money, 0) - coalesce(pt.prev_money, 0) as money_change
+            coalesce(ct.total_points, 0) - coalesce(pt.prev_points, 0) as points_change
         from players p
         left join round_players rp
             on rp.player_id = p.id
@@ -892,9 +921,7 @@ def stats():
             p.full_name,
             p.avatar_data,
             ct.total_points,
-            ct.total_money,
-            pt.prev_points,
-            pt.prev_money
+            pt.prev_points
         order by {order_by} {order_direction} nulls last, p.full_name;
     """
 
@@ -953,13 +980,14 @@ def player_page(player_id):
                     ) as top3,
                     coalesce(sum(rp.season_points), 0) as total_points,
                     coalesce(sum(rp.money_rank), 0) as total_money,
-                    p.avatar_data is not null as has_avatar
+                    p.avatar_data is not null as has_avatar,
+                    p.last_known_handicap
                 from players p
                 left join round_players rp
                     on rp.player_id = p.id
                 where p.id = %s
                   and p.is_active = true
-                group by p.id, p.full_name, p.avatar_data;
+                group by p.id, p.full_name, p.avatar_data, p.last_known_handicap;
                 """,
                 (player_id,)
             )
@@ -1121,7 +1149,8 @@ def player_page(player_id):
     return render_template(
         "player.html",
         player=player,
-        can_edit_player_avatar=can_edit_player(player_id),
+        can_edit_player_profile=can_edit_player(player_id),
+        handicap_display=format_handicap_dk(player[10]),
         last_5_rounds=last_5_rounds,
         chart_labels=chart_labels,
         chart_positions=chart_positions,
@@ -1162,20 +1191,20 @@ def player_avatar(player_id):
 
 
 @app.post("/player/<int:player_id>/avatar")
+@login_required
 def upload_player_avatar(player_id):
-    if not session.get("logged_in"):
-        return redirect(url_for("login", next=f"/player/{player_id}"))
+    settings_url = url_for("player_settings", player_id=player_id) + "#billede"
 
     if not can_edit_player(player_id):
         return "Du har ikke adgang til at redigere dette profilbillede", 403
 
     avatar = request.files.get("avatar")
     if not avatar or not avatar.filename:
-        return redirect(f"/player/{player_id}")
+        return redirect(settings_url)
 
     avatar_bytes = avatar.read()
     if not avatar_bytes:
-        return redirect(f"/player/{player_id}")
+        return redirect(settings_url)
 
     max_size_bytes = 2 * 1024 * 1024
     if len(avatar_bytes) > max_size_bytes:
@@ -1216,21 +1245,73 @@ def upload_player_avatar(player_id):
             )
         conn.commit()
 
-    return redirect(f"/player/{player_id}")
-
-def login_required(view_func):
-    @wraps(view_func)
-    def wrapped_view(*args, **kwargs):
-        if not session.get("logged_in"):
-            return redirect(url_for("login", next=request.path))
-        return view_func(*args, **kwargs)
-    return wrapped_view
+    return redirect(url_for("player_page", player_id=player_id))
 
 
-def can_edit_player(player_id: int) -> bool:
-    if session.get("is_admin"):
-        return True
-    return session.get("player_id") == player_id
+@app.get("/player/<int:player_id>/settings")
+@login_required
+def player_settings(player_id):
+    if not can_edit_player(player_id):
+        return "Du har ikke adgang til at redigere denne profil", 403
+
+    hcp_error = request.args.get("hcp_error", "").strip() or None
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select full_name, last_known_handicap
+                from players
+                where id = %s and is_active = true;
+                """,
+                (player_id,),
+            )
+            row = cur.fetchone()
+
+    if not row:
+        return "Spilleren blev ikke fundet", 404
+
+    full_name, last_hcp = row[0], row[1]
+    hcp_display = format_handicap_dk(last_hcp) or ""
+
+    return render_template(
+        "player_settings.html",
+        player_id=player_id,
+        player_name=full_name,
+        hcp_display=hcp_display,
+        hcp_error=hcp_error,
+    )
+
+
+@app.post("/player/<int:player_id>/handicap")
+@login_required
+def update_player_handicap(player_id):
+    if not can_edit_player(player_id):
+        return "Du har ikke adgang til at redigere denne profil", 403
+
+    raw = request.form.get("last_known_handicap", "")
+    value, err = parse_last_known_handicap_form(raw)
+    if err:
+        return redirect(
+            url_for("player_settings", player_id=player_id, hcp_error=err) + "#hcp"
+        )
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                update players
+                set last_known_handicap = %s
+                where id = %s and is_active = true;
+                """,
+                (value, player_id),
+            )
+            if cur.rowcount == 0:
+                return "Spilleren blev ikke fundet", 404
+        conn.commit()
+
+    return redirect(url_for("player_page", player_id=player_id) + "#profil")
+
 
 @app.get("/forum")
 @login_required
@@ -1418,7 +1499,7 @@ def login():
         if not user[3]:
             return render_template(
                 "login.html",
-                error="Din konto afventer stadig godkendelse fra en administrator.",
+                error="Din konto afventer godkendelse fra en administrator. Skriv til Mads for hurtig godkendelse.",
             )
 
         session["logged_in"] = True

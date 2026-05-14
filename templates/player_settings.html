@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Profilindstillinger · {{ player_name }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <p class="muted" style="margin: 0 0 8px 0;"><a href="{{ url_for('player_page', player_id=player_id) }}#profil">← Tilbage til profil</a></p>
+    <h1 style="margin-top: 0;">Profilindstillinger</h1>
+    <p class="muted">{{ player_name }}</p>
+</div>
+
+<div class="card settings-card" id="billede">
+    <h2>Profilbillede</h2>
+    <p class="muted">JPG, PNG, WEBP eller GIF · maks 2 MB før komprimering.</p>
+    <form action="{{ url_for('upload_player_avatar', player_id=player_id) }}" method="post" enctype="multipart/form-data" class="settings-form">
+        <div class="field">
+            <label for="avatar">Vælg fil</label>
+            <input id="avatar" type="file" name="avatar" accept="image/jpeg,image/png,image/webp,image/gif" required>
+        </div>
+        <button type="submit">Upload nyt billede</button>
+    </form>
+</div>
+
+<div class="card settings-card" id="hcp">
+    <h2>Sidst kendt HCP</h2>
+    <p class="muted">Angiv dit aktuelle handicap (fx fra Mit Golf). Tomt felt og <b>Gem</b> fjerner værdien.</p>
+    {% if hcp_error %}
+        <p class="settings-form-error">{{ hcp_error }}</p>
+    {% endif %}
+    <form action="{{ url_for('update_player_handicap', player_id=player_id) }}" method="post" class="settings-form">
+        <div class="field">
+            <label for="last_known_handicap">Handicap</label>
+            <input id="last_known_handicap" type="text" name="last_known_handicap" value="{{ hcp_display }}" inputmode="decimal" autocomplete="off" placeholder="fx 18,4">
+        </div>
+        <button type="submit">Gem handicap</button>
+    </form>
+</div>
+{% endblock %}
