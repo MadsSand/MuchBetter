@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Kommende begivenheder{% endblock %}
+
+{% block content %}
+<div class="events-page">
+    <h1>Kommende begivenheder</h1>
+
+    {% if events %}
+    <div class="events-stack" aria-label="Kommende begivenheder">
+        {% for ev in events %}
+        <article class="event-banner{% if ev[4] %} event-banner--has-photo{% else %} event-banner--no-photo{% endif %}{% if ev[3] %} event-banner--emphasis{% endif %}">
+            {% if ev[4] %}
+            <div class="event-banner__photo" style="background-image: url('{{ url_for('upcoming_event_course_image', event_id=ev[0]) }}');" role="presentation"></div>
+            <div class="event-banner__edge-fade" aria-hidden="true"></div>
+            {% endif %}
+            <div class="event-banner__inner">
+                <time class="event-banner__date" datetime="{{ ev[2].isoformat() }}">{{ ev[2].strftime('%d.%m.%Y') }}</time>
+                <h2 class="event-banner__title">{{ ev[1] }}</h2>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">Ingen planlagte begivenheder lige nu.</p>
+    {% endif %}
+</div>
+{% endblock %}

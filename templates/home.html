@@ -19,7 +19,9 @@
     <div class="upcoming-events__edge-fade" aria-hidden="true"></div>
     {% endif %}
     <div class="upcoming-events__inner">
-        <h2 class="upcoming-events__title">Kommende Begivenheder</h2>
+        <h2 class="upcoming-events__title">
+            <a href="{{ url_for('upcoming_events_page') }}" class="upcoming-events__title-link">Kommende begivenheder</a>
+        </h2>
         <div class="upcoming-events__layout">
             <div class="upcoming-events__list-col">
                 <ul class="upcoming-events__list">

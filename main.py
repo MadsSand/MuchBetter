@@ -1819,6 +1819,32 @@ def approve_user(user_id):
     return redirect_after_admin_action()
 
 
+@app.get("/begivenheder")
+def upcoming_events_page():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select
+                    ue.id,
+                    ue.title,
+                    ue.event_date,
+                    ue.emphasis,
+                    (
+                        cha.image_data is not null
+                        or ue.course_image_data is not null
+                    ) as has_image
+                from upcoming_events ue
+                left join course_hero_assets cha on cha.id = ue.hero_asset_id
+                where ue.event_date >= current_date
+                order by ue.event_date asc, ue.id asc;
+                """
+            )
+            events = cur.fetchall()
+
+    return render_template("upcoming_events.html", events=events)
+
+
 @app.get("/upcoming-events/<int:event_id>/course-image")
 def upcoming_event_course_image(event_id):
     with psycopg.connect(DB_URL) as conn:

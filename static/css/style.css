@@ -163,6 +163,16 @@ body {
     letter-spacing: 0.02em;
 }
 
+.upcoming-events__title-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.upcoming-events__title-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
 .upcoming-events__layout {
     display: flex;
     flex-direction: column;
@@ -241,6 +251,89 @@ body {
 .upcoming-events__item--empty {
     border: none;
     padding: 8px 0;
+}
+
+/* --- Begivenhedsside --- */
+.events-page h1 {
+    margin: 0 0 20px 0;
+    font-size: 28px;
+}
+
+.events-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.event-banner {
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    min-height: 220px;
+}
+
+.event-banner__photo {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    z-index: 0;
+}
+
+.event-banner__edge-fade {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    box-shadow:
+        inset 0 0 0 1px rgba(0, 0, 0, 0.12),
+        inset 0 0 36px 22px var(--bg),
+        inset 0 0 72px 40px rgba(11, 15, 13, 0.55);
+}
+
+.event-banner__inner {
+    position: relative;
+    z-index: 2;
+    padding: 22px 24px;
+    max-width: 420px;
+    background: linear-gradient(
+        105deg,
+        rgba(11, 15, 13, 0.94) 0%,
+        rgba(11, 15, 13, 0.82) 38%,
+        rgba(11, 15, 13, 0.62) 100%
+    );
+}
+
+.event-banner--no-photo .event-banner__inner {
+    max-width: none;
+    background: var(--surface);
+}
+
+.event-banner__date {
+    display: block;
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.event-banner--has-photo .event-banner__date {
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.event-banner__title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: 0.02em;
+}
+
+.event-banner--emphasis .event-banner__title {
+    font-size: 26px;
+    font-weight: 800;
 }
 
 .stationary-cal {

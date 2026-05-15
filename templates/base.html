@@ -50,6 +50,10 @@
                         <span class="sidebar-icon">↗</span>
                         <span>Statistik</span>
                     </a>
+                    <a href="{{ url_for('upcoming_events_page') }}" class="sidebar-link {% if '/begivenheder' in request.path %}active{% endif %}">
+                        <span class="sidebar-icon">📅</span>
+                        <span>Begivenheder</span>
+                    </a>
                     <a href="/forum" class="sidebar-link {% if '/forum' in request.path %}active{% endif %}">
                         <span class="sidebar-icon">💬</span>
                         <span>Forum</span>
