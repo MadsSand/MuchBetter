@@ -9,7 +9,7 @@
 
     <div class="hero-actions">
         <a href="/rounds" class="secondary-btn">Se alle runder</a>
-        <a href="/stats" class="secondary-btn">Se statistik</a>
+        <a href="/stats" class="secondary-btn">Se leaderboard</a>
     </div>
 </div>
 
@@ -137,6 +137,24 @@
         </div>
     </div>
 </section>
+
+{% if latest_round and round_highlights %}
+<div class="card round-highlights">
+    <h2>Highlights · seneste runde</h2>
+    <p class="round-highlights__meta muted">
+        {{ latest_round[1].strftime('%d.%m.%Y') }} · {{ latest_round[2] }}
+    </p>
+    <ul class="round-highlights__list">
+        {% for item in round_highlights.entries %}
+        <li class="round-highlights__item">
+            <span class="round-highlights__label">{{ item.label }}</span>
+            <span class="round-highlights__value">{{ item.value }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    <a href="/round/{{ latest_round[0] }}" class="secondary-btn">Se fuldt resultat</a>
+</div>
+{% endif %}
 
 <div class="grid">
     <div class="card">

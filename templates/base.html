@@ -17,17 +17,20 @@
             </div>
 
             <nav class="topnav">
+                {% set my_player_id = session.get('player_id') %}
+                {% set my_player_base = '/player/' ~ my_player_id|string if my_player_id else '' %}
+                {% set on_my_page = request.path == '/me' or (my_player_base and (request.path == my_player_base or request.path.startswith(my_player_base ~ '/'))) %}
                 <a href="/" class="{% if request.path == '/' %}active{% endif %}">
                     <span class="topnav-icon">⌂</span>
                     <span>Forside</span>
                 </a>
-                <a href="/me" class="{% if request.path == '/me' %}active{% endif %}">
+                <a href="/me" class="{% if on_my_page %}active{% endif %}">
                     <span class="topnav-icon">👤</span>
                     <span>Min side</span>
                 </a>
-                <a href="/rounds" class="{% if '/rounds' in request.path %}active{% endif %}">
-                    <span class="topnav-icon">🏌</span>
-                    <span>Runder</span>
+                <a href="/players" class="{% if '/players' in request.path or (request.path.startswith('/player/') and not on_my_page) %}active{% endif %}">
+                    <span class="topnav-icon">👥</span>
+                    <span>Spillere</span>
                 </a>
             </nav>
 
@@ -48,7 +51,7 @@
                 <nav class="sidebar-nav">
                     <a href="/stats" class="sidebar-link {% if '/stats' in request.path %}active{% endif %}">
                         <span class="sidebar-icon">↗</span>
-                        <span>Statistik</span>
+                        <span>Leaderboard</span>
                     </a>
                     <a href="{{ url_for('upcoming_events_page') }}" class="sidebar-link {% if '/begivenheder' in request.path %}active{% endif %}">
                         <span class="sidebar-icon">📅</span>
@@ -58,9 +61,13 @@
                         <span class="sidebar-icon">💬</span>
                         <span>Forum</span>
                     </a>
-                    <a href="/players" class="sidebar-link {% if '/players' in request.path %}active{% endif %}">
-                        <span class="sidebar-icon">👥</span>
-                        <span>Spillere</span>
+                    <a href="/rounds" class="sidebar-link {% if '/rounds' in request.path or request.path.startswith('/round/') %}active{% endif %}">
+                        <span class="sidebar-icon">🏌</span>
+                        <span>Runder</span>
+                    </a>
+                    <a href="{{ url_for('qa') }}" class="sidebar-link {% if '/qa' in request.path %}active{% endif %}">
+                        <span class="sidebar-icon">?</span>
+                        <span>QA</span>
                     </a>
                 </nav>
 

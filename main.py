@@ -343,6 +343,141 @@ def can_edit_player(player_id: int) -> bool:
     return session.get("player_id") == player_id
 
 
+def _highlight_names_with_score(rows, score_label="stableford"):
+    names = [r[0] for r in rows]
+    scores = [r[1] for r in rows if len(r) > 1 and r[1] is not None]
+    value = ", ".join(names)
+    if scores and len(set(scores)) == 1:
+        return f"{value} ({scores[0]} {score_label})"
+    if len(names) == 1 and scores:
+        return f"{value} ({scores[0]} {score_label})"
+    return value
+
+
+def fetch_round_highlights(cur, round_id):
+    """Varierede highlights — samme spiller vises kun én gang (vinder undtaget)."""
+    items = []
+    used_names = set()
+
+    def add(label, name, detail=None):
+        if not name or name in used_names:
+            return
+        value = f"{name} ({detail})" if detail is not None else name
+        items.append({"label": label, "value": value})
+        used_names.add(name)
+
+    def add_group(label, rows, score_label="stableford"):
+        eligible = [r for r in rows if r[0] not in used_names]
+        if not eligible:
+            return
+        value = _highlight_names_with_score(eligible, score_label)
+        items.append({"label": label, "value": value})
+        used_names.update(r[0] for r in eligible)
+
+    cur.execute(
+        """
+        select p.full_name, rp.stableford_points
+        from round_players rp
+        join players p on p.id = rp.player_id
+        where rp.round_id = %s
+          and rp.position = 1
+          and rp.status = 'played'
+        order by p.full_name;
+        """,
+        (round_id,),
+    )
+    winner_rows = cur.fetchall()
+    if winner_rows:
+        used_names.update(r[0] for r in winner_rows)
+        items.append({
+            "label": "Vinder",
+            "value": _highlight_names_with_score(winner_rows),
+        })
+
+    cur.execute(
+        """
+        select p.full_name, rp.closest_to_pin_cm
+        from round_players rp
+        join players p on p.id = rp.player_id
+        where rp.round_id = %s
+          and rp.closest_to_pin_cm is not null
+        order by rp.closest_to_pin_cm asc, p.full_name
+        limit 1;
+        """,
+        (round_id,),
+    )
+    row = cur.fetchone()
+    if row:
+        add("Closest to pin", row[0], f"{row[1]} cm")
+
+    cur.execute(
+        """
+        select p.full_name, rp.stableford_points
+        from round_players rp
+        join players p on p.id = rp.player_id
+        where rp.round_id = %s
+          and rp.status = 'played'
+          and rp.stableford_points is not null
+        order by rp.stableford_points asc, p.full_name
+        limit 1;
+        """,
+        (round_id,),
+    )
+    row = cur.fetchone()
+    if row:
+        add("Dagens bombe", row[0], f"{row[1]} stableford")
+
+    cur.execute(
+        """
+        select p.full_name, rp.money_rank
+        from round_players rp
+        join players p on p.id = rp.player_id
+        where rp.round_id = %s
+          and rp.status = 'played'
+          and rp.money_rank is not null
+          and rp.money_rank > 0
+        order by rp.money_rank desc, p.full_name
+        limit 1;
+        """,
+        (round_id,),
+    )
+    row = cur.fetchone()
+    if row:
+        add("Flest fake money", row[0], f"{row[1]} kr")
+
+    cur.execute(
+        """
+        with non_winners as (
+            select
+                p.full_name,
+                rp.stableford_points
+            from round_players rp
+            join players p on p.id = rp.player_id
+            where rp.round_id = %s
+              and rp.status = 'played'
+              and rp.stableford_points is not null
+              and (rp.position is null or rp.position > 1)
+        ),
+        best as (
+            select max(stableford_points) as best_sf
+            from non_winners
+        )
+        select nw.full_name, nw.stableford_points
+        from non_winners nw
+        cross join best b
+        where nw.stableford_points = b.best_sf
+        order by nw.full_name;
+        """,
+        (round_id,),
+    )
+    add_group("Bedste score uden sejr", cur.fetchall())
+
+    if not items:
+        return None
+
+    return {"entries": items}
+
+
 def admin_required(view_func):
     @wraps(view_func)
     def wrapped_view(*args, **kwargs):
@@ -612,6 +747,10 @@ def home():
             bg_row = cur.fetchone()
             upcoming_bg_event_id = bg_row[0] if bg_row else None
 
+            round_highlights = None
+            if latest_round:
+                round_highlights = fetch_round_highlights(cur, latest_round[0])
+
     cal_events = [
         {"y": r[2].year, "m": r[2].month, "d": r[2].day, "t": r[1]}
         for r in upcoming_for_calendar
@@ -640,6 +779,7 @@ def home():
         upcoming_next_three=upcoming_next_three,
         upcoming_bg_event_id=upcoming_bg_event_id,
         upcoming_cal_json=upcoming_cal_json,
+        round_highlights=round_highlights,
     )
 
 @app.get("/new")
@@ -1078,6 +1218,7 @@ def delete_round(round_id):
 def stats():
     sort = request.args.get("sort", "wins")
     direction = request.args.get("direction", "desc")
+    year_raw = (request.args.get("year") or "").strip()
 
     allowed_sorts = {
         "name": "full_name",
@@ -1095,83 +1236,107 @@ def stats():
     order_by = allowed_sorts.get(sort, "wins")
     order_direction = direction if direction in allowed_directions else "desc"
 
-    query = f"""
-        with latest_round_cte as (
-            select id, round_date, season_year
-            from rounds
-            order by round_date desc, id desc
-            limit 1
-        ),
-        current_totals as (
-            select
-                p.id as player_id,
-                coalesce(sum(case when r.season_year = lr.season_year then rp.season_points else 0 end), 0) as total_points
-            from players p
-            left join round_players rp
-                on rp.player_id = p.id
-            left join rounds r
-                on r.id = rp.round_id
-            cross join latest_round_cte lr
-            where p.is_active = true
-            group by p.id
-        ),
-        previous_totals as (
-            select
-                p.id as player_id,
-                coalesce(sum(
-                    case
-                        when r.season_year = lr.season_year
-                        and (
-                            r.round_date < lr.round_date
-                            or (r.round_date = lr.round_date and r.id < lr.id)
-                        )
-                        then rp.season_points
-                        else 0
-                    end
-                ), 0) as prev_points
-            from players p
-            left join round_players rp
-                on rp.player_id = p.id
-            left join rounds r
-                on r.id = rp.round_id
-            cross join latest_round_cte lr
-            where p.is_active = true
-            group by p.id
-        )
-        select
-            p.id,
-            p.full_name,
-            p.avatar_data is not null as has_avatar,
-            count(*) filter (where rp.status = 'played') as rounds_played,
-            round(avg(rp.stableford_points) filter (where rp.status = 'played'), 2) as avg_stableford,
-            max(rp.stableford_points) as best_stableford,
-            count(*) filter (where rp.position = 1) as wins,
-            count(*) filter (
-                where rp.position <= 3
-                and rp.position is not null
-            ) as top3,
-            coalesce(sum(rp.season_points), 0) as total_points,
-            coalesce(ct.total_points, 0) - coalesce(pt.prev_points, 0) as points_change
-        from players p
-        left join round_players rp
-            on rp.player_id = p.id
-        left join current_totals ct
-            on ct.player_id = p.id
-        left join previous_totals pt
-            on pt.player_id = p.id
-        where p.is_active = true
-        group by
-            p.id,
-            p.full_name,
-            p.avatar_data,
-            ct.total_points,
-            pt.prev_points
-        order by {order_by} {order_direction} nulls last, p.full_name;
-    """
-
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
-            cur.execute(query)
+            cur.execute(
+                """
+                select distinct season_year
+                from rounds
+                order by season_year desc;
+                """
+            )
+            available_years = [r[0] for r in cur.fetchall()]
+
+            if available_years:
+                if year_raw.isdigit() and int(year_raw) in available_years:
+                    selected_year = int(year_raw)
+                else:
+                    selected_year = available_years[0]
+            else:
+                selected_year = date.today().year
+
+            query = f"""
+                with latest_round_cte as (
+                    select id, round_date, season_year
+                    from rounds
+                    where season_year = %s
+                    order by round_date desc, id desc
+                    limit 1
+                ),
+                current_totals as (
+                    select
+                        p.id as player_id,
+                        coalesce(sum(rp.season_points), 0) as total_points
+                    from players p
+                    left join round_players rp
+                        on rp.player_id = p.id
+                    left join rounds r
+                        on r.id = rp.round_id
+                        and r.season_year = %s
+                    cross join latest_round_cte lr
+                    where p.is_active = true
+                    group by p.id
+                ),
+                previous_totals as (
+                    select
+                        p.id as player_id,
+                        coalesce(sum(
+                            case
+                                when (
+                                    r.round_date < lr.round_date
+                                    or (r.round_date = lr.round_date and r.id < lr.id)
+                                )
+                                then rp.season_points
+                                else 0
+                            end
+                        ), 0) as prev_points
+                    from players p
+                    left join round_players rp
+                        on rp.player_id = p.id
+                    left join rounds r
+                        on r.id = rp.round_id
+                        and r.season_year = %s
+                    cross join latest_round_cte lr
+                    where p.is_active = true
+                    group by p.id
+                )
+                select
+                    p.id,
+                    p.full_name,
+                    p.avatar_data is not null as has_avatar,
+                    count(*) filter (where rp.status = 'played') as rounds_played,
+                    round(avg(rp.stableford_points) filter (where rp.status = 'played'), 2) as avg_stableford,
+                    max(rp.stableford_points) as best_stableford,
+                    count(*) filter (where rp.position = 1) as wins,
+                    count(*) filter (
+                        where rp.position <= 3
+                        and rp.position is not null
+                    ) as top3,
+                    coalesce(sum(rp.season_points), 0) as total_points,
+                    coalesce(ct.total_points, 0) - coalesce(pt.prev_points, 0) as points_change
+                from players p
+                left join round_players rp
+                    on rp.player_id = p.id
+                left join rounds r
+                    on r.id = rp.round_id
+                    and r.season_year = %s
+                left join current_totals ct
+                    on ct.player_id = p.id
+                left join previous_totals pt
+                    on pt.player_id = p.id
+                where p.is_active = true
+                group by
+                    p.id,
+                    p.full_name,
+                    p.avatar_data,
+                    ct.total_points,
+                    pt.prev_points
+                order by {order_by} {order_direction} nulls last, p.full_name;
+            """
+            cur.execute(
+                query,
+                (selected_year, selected_year, selected_year, selected_year),
+            )
             player_stats = cur.fetchall()
 
     return render_template(
@@ -1179,7 +1344,14 @@ def stats():
         player_stats=player_stats,
         sort=sort,
         direction=direction,
+        selected_year=selected_year,
+        available_years=available_years,
     )
+
+
+@app.get("/qa")
+def qa():
+    return render_template("qa.html")
 
 
 @app.get("/players")

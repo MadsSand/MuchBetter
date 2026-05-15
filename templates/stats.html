@@ -1,27 +1,40 @@
 {% extends "base.html" %}
 
-{% block title %}Statistik{% endblock %}
-
-{% block container_class %}container-wide{% endblock %}
+{% block title %}Leaderboard{% endblock %}
 
 {% macro sort_arrows(sort_key, current_sort, current_dir) -%}
 <span class="th-sort-arrows" aria-hidden="true">
-    <a href="{{ url_for('stats', sort=sort_key, direction='asc') }}"
+    <a href="{{ url_for('stats', sort=sort_key, direction='asc', year=selected_year) }}"
        class="sort-arrow{% if current_sort == sort_key and current_dir == 'asc' %} is-active{% endif %}"
        title="Sorter stigende">▲</a>
-    <a href="{{ url_for('stats', sort=sort_key, direction='desc') }}"
+    <a href="{{ url_for('stats', sort=sort_key, direction='desc', year=selected_year) }}"
        class="sort-arrow{% if current_sort == sort_key and current_dir == 'desc' %} is-active{% endif %}"
        title="Sorter faldende">▼</a>
 </span>
 {%- endmacro %}
 
 {% block content %}
-<h1>Statistik</h1>
+<div class="leaderboard-header">
+    <h1>Leaderboard</h1>
+    {% if available_years %}
+    <form method="get" class="year-filter" action="{{ url_for('stats') }}">
+        <label for="year">Sæson</label>
+        <select id="year" name="year" onchange="this.form.submit()">
+            {% for y in available_years %}
+            <option value="{{ y }}"{% if y == selected_year %} selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+        <input type="hidden" name="sort" value="{{ sort }}">
+        <input type="hidden" name="direction" value="{{ direction }}">
+    </form>
+    {% endif %}
+</div>
 
 <div class="card">
-    <h2>Spillerstatistik</h2>
-    <div class="muted">Oversigt over aktive spillere på tværs af alle runder. Klik på ▲ eller ▼ ved en kolonne for at sortere.</div>
+    <h2>Sæson {{ selected_year }}</h2>
+    <div class="muted">Aktive spillere i valgt sæson. Klik på ▲ eller ▼ ved en kolonne for at sortere.</div>
 
+    {% if player_stats %}
     <div class="table-wrap" style="margin-top: 12px;">
         <table class="stats-table">
             <tr>
@@ -68,22 +81,12 @@
             {% endfor %}
         </table>
     </div>
+    {% else %}
+    <p class="muted" style="margin-top: 12px;">Ingen runder registreret for {{ selected_year }} endnu.</p>
+    {% endif %}
 </div>
 
-<div class="card">
-    <h2>Pointsystem</h2>
-    <div class="muted" style="line-height: 1.6;">
-        <b>Sådan beregnes point:</b><br><br>
-        Du får <b>2 point pr. spiller du vinder over på dagen</b><br>
-        <b>Bonus til top 3:</b><br>
-        &nbsp;&nbsp;&nbsp;1. plads: +4 point<br>
-        &nbsp;&nbsp;&nbsp;2. plads: +2 point<br>
-        &nbsp;&nbsp;&nbsp;3. plads: +1 point<br><br>
-        Sidsteplads giver 0 point<br>
-        Ved uafgjort deles point for de placeringer man optager<br><br>
-        <span style="font-size: 13px;">
-            Eksempel: 8 spillere → vinder får 2×7 pr. spiller man har vundet over + 4 bonus = 18 point
-        </span>
-    </div>
-</div>
+<section class="leaderboard-extra" aria-label="Udvidet leaderboard">
+    {# Plads til ekstra tabeller senere #}
+</section>
 {% endblock %}
