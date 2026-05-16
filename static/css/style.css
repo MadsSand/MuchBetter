@@ -428,6 +428,54 @@ body {
     line-height: 1.6;
 }
 
+.course-stats {
+    margin-top: 16px;
+}
+
+.course-stats-table th,
+.course-stats-table td {
+    font-size: 14px;
+}
+
+.me-dashboard__profile {
+    margin-bottom: 16px;
+}
+
+.me-dashboard__grid {
+    margin-bottom: 16px;
+}
+
+.me-dashboard__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.me-stats-header {
+    margin-bottom: 16px;
+}
+
+.me-stats-header h1 {
+    margin: 0 0 6px 0;
+}
+
+.profile-back-link {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+}
+
+.profile-back-link a {
+    color: var(--muted);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.profile-back-link a:hover {
+    color: var(--text);
+    text-decoration: underline;
+}
+
 .stationary-cal {
     width: 100%;
     max-width: 340px;

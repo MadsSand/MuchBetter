@@ -425,7 +425,7 @@ def fetch_round_highlights(cur, round_id):
     )
     row = cur.fetchone()
     if row:
-        add("Dagens bombe", row[0], f"{row[1]} stableford")
+        add("Today's bomb", row[0], f"{row[1]} stableford")
 
     cur.execute(
         """
@@ -476,6 +476,235 @@ def fetch_round_highlights(cur, round_id):
         return None
 
     return {"entries": items}
+
+
+def fetch_course_stats(cur, season_year):
+    cur.execute(
+        """
+        select
+            c.name,
+            count(distinct r.id)::int as rounds_played,
+            coalesce(max(rp.season_points), 0) as top_points,
+            round(avg(rp.season_points), 2) as avg_points,
+            max(rp.stableford_points) as best_stableford,
+            min(rp.stableford_points) as worst_stableford
+        from courses c
+        inner join rounds r
+            on r.course_id = c.id
+            and r.season_year = %s
+        inner join round_players rp
+            on rp.round_id = r.id
+            and rp.status = 'played'
+        group by c.id, c.name
+        order by c.name;
+        """,
+        (season_year,),
+    )
+    return cur.fetchall()
+
+
+def build_chart_series(progress_rows):
+    return {
+        "chart_labels": [str(row[1]) for row in progress_rows],
+        "chart_positions": [
+            int(row[10]) if row[10] is not None else None for row in progress_rows
+        ],
+        "chart_stableford": [
+            int(row[4]) if row[7] == "played" and row[4] is not None else None
+            for row in progress_rows
+        ],
+        "chart_round_points": [
+            float(row[5]) if row[5] is not None else 0 for row in progress_rows
+        ],
+        "chart_round_money": [
+            float(row[6]) if row[6] is not None else 0 for row in progress_rows
+        ],
+        "chart_running_points": [
+            float(row[8]) if row[8] is not None else 0 for row in progress_rows
+        ],
+        "chart_running_money": [
+            float(row[9]) if row[9] is not None else 0 for row in progress_rows
+        ],
+    }
+
+
+def load_player_stats_bundle(cur, player_id):
+    cur.execute(
+        """
+        select
+            p.id,
+            p.full_name,
+            count(*) filter (where rp.status = 'played') as rounds_played,
+            round(avg(rp.stableford_points) filter (where rp.status = 'played'), 2) as avg_stableford,
+            max(rp.stableford_points) as best_stableford,
+            count(*) filter (where rp.position = 1) as wins,
+            count(*) filter (
+                where rp.position <= 3
+                and rp.position is not null
+            ) as top3,
+            coalesce(sum(rp.season_points), 0) as total_points,
+            coalesce(sum(rp.money_rank), 0) as total_money,
+            p.avatar_data is not null as has_avatar,
+            p.last_known_handicap
+        from players p
+        left join round_players rp
+            on rp.player_id = p.id
+        where p.id = %s
+          and p.is_active = true
+        group by p.id, p.full_name, p.avatar_data, p.last_known_handicap;
+        """,
+        (player_id,),
+    )
+    player = cur.fetchone()
+    if not player:
+        return None
+
+    cur.execute(
+        """
+        select
+            r.id,
+            r.round_date,
+            c.name,
+            rp.stableford_points,
+            rp.position,
+            rp.season_points,
+            rp.money_rank
+        from round_players rp
+        join rounds r on r.id = rp.round_id
+        join courses c on c.id = r.course_id
+        where rp.player_id = %s
+          and rp.status = 'played'
+        order by r.round_date desc, r.id desc
+        limit 5;
+        """,
+        (player_id,),
+    )
+    last_5_rounds = cur.fetchall()
+
+    cur.execute(
+        """
+        with player_seasons as (
+            select distinct r.season_year
+            from round_players rp
+            join rounds r on r.id = rp.round_id
+            where rp.player_id = %s
+        ),
+        relevant_rounds as (
+            select
+                r.id as round_id,
+                r.round_date,
+                r.season_year,
+                c.name as course_name
+            from rounds r
+            join courses c on c.id = r.course_id
+            where r.season_year in (select season_year from player_seasons)
+        ),
+        player_round_data as (
+            select
+                rr.round_id,
+                rr.round_date,
+                rr.season_year,
+                rr.course_name,
+                coalesce(rp.position, null) as round_position,
+                coalesce(rp.stableford_points, 0) as stableford_points,
+                coalesce(rp.season_points, 0) as season_points,
+                coalesce(rp.money_rank, 0) as money_rank,
+                coalesce(rp.status, 'dnp') as status
+            from relevant_rounds rr
+            left join round_players rp
+                on rp.round_id = rr.round_id
+                and rp.player_id = %s
+        ),
+        leaderboard_after_each_round as (
+            select
+                rr.round_id,
+                p.id as player_id,
+                rank() over (
+                    partition by rr.round_id
+                    order by
+                        coalesce(sum(
+                            case
+                                when r2.season_year = rr.season_year
+                                and (
+                                    r2.round_date < rr.round_date
+                                    or (r2.round_date = rr.round_date and r2.id <= rr.round_id)
+                                )
+                                then rp2.season_points
+                                else 0
+                            end
+                        ), 0) desc,
+                        coalesce(sum(
+                            case
+                                when r2.season_year = rr.season_year
+                                and (
+                                    r2.round_date < rr.round_date
+                                    or (r2.round_date = rr.round_date and r2.id <= rr.round_id)
+                                )
+                                then rp2.money_rank
+                                else 0
+                            end
+                        ), 0) desc,
+                        p.full_name
+                ) as leaderboard_position
+            from relevant_rounds rr
+            cross join players p
+            left join round_players rp2
+                on rp2.player_id = p.id
+            left join rounds r2
+                on r2.id = rp2.round_id
+            where p.is_active = true
+            group by rr.round_id, rr.season_year, rr.round_date, p.id, p.full_name
+        ),
+        final_rows as (
+            select
+                prd.round_id,
+                prd.round_date,
+                prd.course_name,
+                prd.round_position,
+                prd.stableford_points,
+                prd.season_points,
+                prd.money_rank,
+                prd.status,
+                sum(prd.season_points) over (
+                    partition by prd.season_year
+                    order by prd.round_date, prd.round_id
+                    rows between unbounded preceding and current row
+                ) as running_points,
+                sum(prd.money_rank) over (
+                    partition by prd.season_year
+                    order by prd.round_date, prd.round_id
+                    rows between unbounded preceding and current row
+                ) as running_money,
+                laer.leaderboard_position
+            from player_round_data prd
+            left join leaderboard_after_each_round laer
+                on laer.round_id = prd.round_id
+                and laer.player_id = %s
+        )
+        select
+            round_id,
+            round_date,
+            course_name,
+            round_position,
+            stableford_points,
+            season_points,
+            money_rank,
+            status,
+            running_points,
+            running_money,
+            leaderboard_position
+        from final_rows
+        order by round_date, round_id;
+        """,
+        (player_id, player_id, player_id),
+    )
+    progress_rows = cur.fetchall()
+
+    return {
+        "player": player,
+        "last_5_rounds": last_5_rounds,
+        **build_chart_series(progress_rows),
+    }
 
 
 def admin_required(view_func):
@@ -1338,10 +1567,12 @@ def stats():
                 (selected_year, selected_year, selected_year, selected_year),
             )
             player_stats = cur.fetchall()
+            course_stats = fetch_course_stats(cur, selected_year)
 
     return render_template(
         "stats.html",
         player_stats=player_stats,
+        course_stats=course_stats,
         sort=sort,
         direction=direction,
         selected_year=selected_year,
@@ -1381,200 +1612,27 @@ def health():
 def player_page(player_id):
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                select
-                    p.id,
-                    p.full_name,
-                    count(*) filter (where rp.status = 'played') as rounds_played,
-                    round(avg(rp.stableford_points) filter (where rp.status = 'played'), 2) as avg_stableford,
-                    max(rp.stableford_points) as best_stableford,
-                    count(*) filter (where rp.position = 1) as wins,
-                    count(*) filter (
-                        where rp.position <= 3
-                        and rp.position is not null
-                    ) as top3,
-                    coalesce(sum(rp.season_points), 0) as total_points,
-                    coalesce(sum(rp.money_rank), 0) as total_money,
-                    p.avatar_data is not null as has_avatar,
-                    p.last_known_handicap
-                from players p
-                left join round_players rp
-                    on rp.player_id = p.id
-                where p.id = %s
-                  and p.is_active = true
-                group by p.id, p.full_name, p.avatar_data, p.last_known_handicap;
-                """,
-                (player_id,)
-            )
-            player = cur.fetchone()
-
-            if not player:
+            bundle = load_player_stats_bundle(cur, player_id)
+            if not bundle:
                 return "Spilleren blev ikke fundet", 404
+            player = bundle["player"]
 
-            cur.execute(
-                """
-                select
-                    r.id,
-                    r.round_date,
-                    c.name,
-                    rp.stableford_points,
-                    rp.position,
-                    rp.season_points,
-                    rp.money_rank
-                from round_players rp
-                join rounds r on r.id = rp.round_id
-                join courses c on c.id = r.course_id
-                where rp.player_id = %s
-                  and rp.status = 'played'
-                order by r.round_date desc, r.id desc
-                limit 5;
-                """,
-                (player_id,)
-            )
-            last_5_rounds = cur.fetchall()
-
-            cur.execute(
-                """
-                with player_seasons as (
-                    select distinct r.season_year
-                    from round_players rp
-                    join rounds r on r.id = rp.round_id
-                    where rp.player_id = %s
-                ),
-                relevant_rounds as (
-                    select
-                        r.id as round_id,
-                        r.round_date,
-                        r.season_year,
-                        c.name as course_name
-                    from rounds r
-                    join courses c on c.id = r.course_id
-                    where r.season_year in (select season_year from player_seasons)
-                ),
-                player_round_data as (
-                    select
-                        rr.round_id,
-                        rr.round_date,
-                        rr.season_year,
-                        rr.course_name,
-                        coalesce(rp.position, null) as round_position,
-                        coalesce(rp.stableford_points, 0) as stableford_points,
-                        coalesce(rp.season_points, 0) as season_points,
-                        coalesce(rp.money_rank, 0) as money_rank,
-                        coalesce(rp.status, 'dnp') as status
-                    from relevant_rounds rr
-                    left join round_players rp
-                        on rp.round_id = rr.round_id
-                    and rp.player_id = %s
-                ),
-                leaderboard_after_each_round as (
-                    select
-                        rr.round_id,
-                        p.id as player_id,
-                        rank() over (
-                            partition by rr.round_id
-                            order by
-                                coalesce(sum(
-                                    case
-                                        when r2.season_year = rr.season_year
-                                        and (
-                                            r2.round_date < rr.round_date
-                                            or (r2.round_date = rr.round_date and r2.id <= rr.round_id)
-                                        )
-                                        then rp2.season_points
-                                        else 0
-                                    end
-                                ), 0) desc,
-                                coalesce(sum(
-                                    case
-                                        when r2.season_year = rr.season_year
-                                        and (
-                                            r2.round_date < rr.round_date
-                                            or (r2.round_date = rr.round_date and r2.id <= rr.round_id)
-                                        )
-                                        then rp2.money_rank
-                                        else 0
-                                    end
-                                ), 0) desc,
-                                p.full_name
-                        ) as leaderboard_position
-                    from relevant_rounds rr
-                    cross join players p
-                    left join round_players rp2
-                        on rp2.player_id = p.id
-                    left join rounds r2
-                        on r2.id = rp2.round_id
-                    where p.is_active = true
-                    group by rr.round_id, rr.season_year, rr.round_date, p.id, p.full_name
-                ),
-                final_rows as (
-                    select
-                        prd.round_id,
-                        prd.round_date,
-                        prd.course_name,
-                        prd.round_position,
-                        prd.stableford_points,
-                        prd.season_points,
-                        prd.money_rank,
-                        prd.status,
-                        sum(prd.season_points) over (
-                            partition by prd.season_year
-                            order by prd.round_date, prd.round_id
-                            rows between unbounded preceding and current row
-                        ) as running_points,
-                        sum(prd.money_rank) over (
-                            partition by prd.season_year
-                            order by prd.round_date, prd.round_id
-                            rows between unbounded preceding and current row
-                        ) as running_money,
-                        laer.leaderboard_position
-                    from player_round_data prd
-                    left join leaderboard_after_each_round laer
-                        on laer.round_id = prd.round_id
-                    and laer.player_id = %s
-                )
-                select
-                    round_id,
-                    round_date,
-                    course_name,
-                    round_position,
-                    stableford_points,
-                    season_points,
-                    money_rank,
-                    status,
-                    running_points,
-                    running_money,
-                    leaderboard_position
-                from final_rows
-                order by round_date, round_id;
-                """,
-                (player_id, player_id, player_id)
-            )
-            progress_rows = cur.fetchall()
-
-    chart_labels = [str(row[1]) for row in progress_rows]
-    chart_positions = [int(row[10]) if row[10] is not None else None for row in progress_rows]
-    chart_stableford = [int(row[4]) if row[7] == "played" and row[4] is not None else None for row in progress_rows]
-    chart_round_points = [float(row[5]) if row[5] is not None else 0 for row in progress_rows]
-    chart_round_money = [float(row[6]) if row[6] is not None else 0 for row in progress_rows]
-    chart_running_points = [float(row[8]) if row[8] is not None else 0 for row in progress_rows]
-    chart_running_money = [float(row[9]) if row[9] is not None else 0 for row in progress_rows]
-
+    is_own_profile = session.get("player_id") == player_id
 
     return render_template(
         "player.html",
         player=player,
+        is_own_profile=is_own_profile,
         can_edit_player_profile=can_edit_player(player_id),
         handicap_display=format_handicap_dk(player[10]),
-        last_5_rounds=last_5_rounds,
-        chart_labels=chart_labels,
-        chart_positions=chart_positions,
-        chart_stableford=chart_stableford,
-        chart_round_points=chart_round_points,
-        chart_round_money=chart_round_money,
-        chart_running_points=chart_running_points,
-        chart_running_money=chart_running_money,
+        last_5_rounds=bundle["last_5_rounds"],
+        chart_labels=bundle["chart_labels"],
+        chart_positions=bundle["chart_positions"],
+        chart_stableford=bundle["chart_stableford"],
+        chart_round_points=bundle["chart_round_points"],
+        chart_round_money=bundle["chart_round_money"],
+        chart_running_points=bundle["chart_running_points"],
+        chart_running_money=bundle["chart_running_money"],
     )
 
 
@@ -2167,9 +2225,111 @@ def my_page():
     player_id = session.get("player_id")
 
     if not player_id:
-        return "Din bruger er ikke koblet til din side endnu", 403
+        return "Din bruger er ikke koblet til en spiller endnu", 403
 
-    return redirect(f"/player/{player_id}")
+    season_year = date.today().year
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select
+                    p.id,
+                    p.full_name,
+                    p.avatar_data is not null as has_avatar,
+                    p.last_known_handicap
+                from players p
+                where p.id = %s and p.is_active = true;
+                """,
+                (player_id,),
+            )
+            player = cur.fetchone()
+            if not player:
+                return "Spilleren blev ikke fundet", 404
+
+            cur.execute(
+                """
+                with totals as (
+                    select
+                        p.id,
+                        coalesce(sum(rp.season_points), 0) as total_points
+                    from players p
+                    left join round_players rp on rp.player_id = p.id
+                    left join rounds r
+                        on r.id = rp.round_id
+                        and r.season_year = %s
+                    where p.is_active = true
+                    group by p.id
+                ),
+                ranked as (
+                    select
+                        id,
+                        total_points,
+                        rank() over (
+                            order by total_points desc, id
+                        ) as season_rank
+                    from totals
+                )
+                select season_rank, total_points
+                from ranked
+                where id = %s;
+                """,
+                (season_year, player_id),
+            )
+            standing = cur.fetchone()
+
+            cur.execute(
+                """
+                select title, event_date
+                from upcoming_events
+                where event_date >= current_date
+                order by event_date asc, id asc
+                limit 1;
+                """
+            )
+            next_event = cur.fetchone()
+
+            cur.execute(
+                """
+                select
+                    r.id,
+                    r.round_date,
+                    c.name,
+                    rp.stableford_points,
+                    rp.position,
+                    rp.season_points
+                from round_players rp
+                join rounds r on r.id = rp.round_id
+                join courses c on c.id = r.course_id
+                where rp.player_id = %s
+                  and rp.status = 'played'
+                order by r.round_date desc, r.id desc
+                limit 1;
+                """,
+                (player_id,),
+            )
+            last_round = cur.fetchone()
+
+    return render_template(
+        "me.html",
+        player=player,
+        season_year=season_year,
+        season_rank=standing[0] if standing else None,
+        season_points=standing[1] if standing else 0,
+        next_event=next_event,
+        last_round=last_round,
+        handicap_display=format_handicap_dk(player[3]),
+        can_edit_player_profile=True,
+    )
+
+
+@app.get("/me/statistik")
+@login_required
+def my_stats():
+    player_id = session.get("player_id")
+    if not player_id:
+        return "Din bruger er ikke koblet til en spiller endnu", 403
+    return redirect(url_for("player_page", player_id=player_id))
 
 app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SESSION_COOKIE_HTTPONLY"] = True

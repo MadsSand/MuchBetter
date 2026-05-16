@@ -19,16 +19,17 @@
             <nav class="topnav">
                 {% set my_player_id = session.get('player_id') %}
                 {% set my_player_base = '/player/' ~ my_player_id|string if my_player_id else '' %}
-                {% set on_my_page = request.path == '/me' or (my_player_base and (request.path == my_player_base or request.path.startswith(my_player_base ~ '/'))) %}
+                {% set on_my_profile = my_player_base and (request.path == my_player_base or request.path.startswith(my_player_base ~ '/')) %}
+                {% set on_my_dashboard = request.path == '/me' or on_my_profile %}
                 <a href="/" class="{% if request.path == '/' %}active{% endif %}">
                     <span class="topnav-icon">⌂</span>
                     <span>Forside</span>
                 </a>
-                <a href="/me" class="{% if on_my_page %}active{% endif %}">
+                <a href="/me" class="{% if on_my_dashboard %}active{% endif %}">
                     <span class="topnav-icon">👤</span>
                     <span>Min side</span>
                 </a>
-                <a href="/players" class="{% if '/players' in request.path or (request.path.startswith('/player/') and not on_my_page) %}active{% endif %}">
+                <a href="/players" class="{% if '/players' in request.path or (request.path.startswith('/player/') and not on_my_profile) %}active{% endif %}">
                     <span class="topnav-icon">👥</span>
                     <span>Spillere</span>
                 </a>

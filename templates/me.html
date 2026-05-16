@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Min side{% endblock %}
+
+{% block content %}
+<div class="me-dashboard">
+    <div class="card profile me-dashboard__profile">
+        {% if player[2] %}
+            <img class="avatar avatar-img" src="/player/{{ player[0] }}/avatar" alt="Avatar for {{ player[1] }}">
+        {% else %}
+            <div class="avatar">{{ player[1][0] }}</div>
+        {% endif %}
+        <div>
+            <h1>Hej, {{ player[1] }}</h1>
+            <p class="muted">Dit overblik i MuchBetter Golf Liga</p>
+            <p class="profile-handicap-line">
+                HCP:
+                {% if handicap_display %}
+                    <strong>{{ handicap_display }}</strong>
+                {% else %}
+                    <span class="muted">Ikke angivet</span>
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    <div class="grid me-dashboard__grid">
+        <div class="card">
+            <h2>Sæson {{ season_year }}</h2>
+            {% if season_rank %}
+                <div class="meta-number">#{{ season_rank }}</div>
+                <p class="muted">{{ season_points }} point i alt</p>
+            {% else %}
+                <p class="muted">Ingen point registreret i år endnu.</p>
+            {% endif %}
+            <a href="{{ url_for('stats', year=season_year) }}" class="secondary-btn" style="margin-top: 12px; display: inline-block;">Se leaderboard</a>
+        </div>
+
+        <div class="card">
+            <h2>Næste begivenhed</h2>
+            {% if next_event %}
+                <p><strong>{{ next_event[0] }}</strong></p>
+                <p class="muted">{{ next_event[1].strftime('%d.%m.%Y') }}</p>
+                <a href="{{ url_for('upcoming_events_page') }}" class="secondary-btn" style="margin-top: 12px; display: inline-block;">Alle begivenheder</a>
+            {% else %}
+                <p class="muted">Ingen planlagte begivenheder.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Seneste runde</h2>
+        {% if last_round %}
+            <p><strong>{{ last_round[2] }}</strong> · {{ last_round[1].strftime('%d.%m.%Y') }}</p>
+            <p class="muted">
+                Stableford {{ last_round[3] }}
+                {% if last_round[4] %} · {{ last_round[4] }}. plads{% endif %}
+                {% if last_round[5] is not none %} · {{ last_round[5] }} point{% endif %}
+            </p>
+            <a href="/round/{{ last_round[0] }}" class="secondary-btn" style="margin-top: 12px; display: inline-block;">Se resultat</a>
+        {% else %}
+            <p class="muted">Du har ingen registrerede runder endnu.</p>
+        {% endif %}
+    </div>
+
+    <div class="me-dashboard__actions">
+        <a href="{{ url_for('player_page', player_id=player[0]) }}" class="button-link">Min profil & statistik</a>
+        {% if can_edit_player_profile %}
+            <a href="{{ url_for('player_settings', player_id=player[0]) }}" class="secondary-btn">Indstillinger</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -86,7 +86,32 @@
     {% endif %}
 </div>
 
-<section class="leaderboard-extra" aria-label="Udvidet leaderboard">
-    {# Plads til ekstra tabeller senere #}
-</section>
+{% if course_stats %}
+<div class="card course-stats">
+    <h2>Banestatistik · sæson {{ selected_year }}</h2>
+    <p class="muted">Aggregeret over alle spillede runder per bane i valgt sæson.</p>
+    <div class="table-wrap" style="margin-top: 12px;">
+        <table class="stats-table course-stats-table">
+            <tr>
+                <th>Bane</th>
+                <th>Runder</th>
+                <th>Top point</th>
+                <th>Snit point</th>
+                <th>Bedste stableford</th>
+                <th>Værste stableford</th>
+            </tr>
+            {% for c in course_stats %}
+            <tr>
+                <td>{{ c[0] }}</td>
+                <td>{{ c[1] }}</td>
+                <td>{{ c[2] }}</td>
+                <td>{{ c[3] if c[3] is not none else "" }}</td>
+                <td>{{ c[4] if c[4] is not none else "" }}</td>
+                <td>{{ c[5] if c[5] is not none else "" }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
