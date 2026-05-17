@@ -3,7 +3,11 @@
 {% block title %}Kommende events{% endblock %}
 
 {% block content %}
-<p class="muted" style="margin-bottom: 16px;"><a href="{{ url_for('admin_users') }}">← Tilbage til godkend brugere</a></p>
+<p class="muted" style="margin-bottom: 16px;">
+    <a href="{{ url_for('admin_users') }}">← Godkend brugere</a>
+    <span class="muted"> · </span>
+    <a href="{{ url_for('admin_home') }}">Forside · baggrunde</a>
+</p>
 
 <h1>Kommende events</h1>
 <p class="muted">Disse events vises på forsiden. Baggrundsbilledet er fra den næste kommende event med billede. Billeder gemmes som <strong>WebP max ~1280×720</strong> og <strong>samles i én kopi pr. identisk fil</strong> (efter komprimering). Vælg et eksisterende billede nedenfor for at undgå at uploade samme bane igen.</p>

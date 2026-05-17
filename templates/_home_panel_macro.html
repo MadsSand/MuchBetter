@@ -1,0 +1,13 @@
+{% macro home_panel(slug, extra_classes='') %}
+{% set bg_map = home_backgrounds if home_backgrounds is defined else {} %}
+{% set has_bg = slug in bg_map %}
+<div class="home-panel {{ extra_classes }}{% if has_bg %} home-panel--has-photo{% else %} home-panel--no-photo{% endif %}">
+    {% if has_bg %}
+    <div class="home-panel__photo" style="background-image: url('{{ url_for('home_panel_image', slug=slug) }}');" role="presentation"></div>
+    <div class="home-panel__edge-fade" aria-hidden="true"></div>
+    {% endif %}
+    <div class="home-panel__inner">
+        {{ caller() }}
+    </div>
+</div>
+{% endmacro %}

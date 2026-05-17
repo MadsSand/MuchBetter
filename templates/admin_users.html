@@ -3,7 +3,11 @@
 {% block title %}Godkend brugere{% endblock %}
 
 {% block content %}
-<p class="muted" style="margin-bottom: 16px;"><a href="{{ url_for('admin_events') }}">Kommende events</a></p>
+<p class="muted" style="margin-bottom: 16px;">
+    <a href="{{ url_for('admin_events') }}">Kommende events</a>
+    <span class="muted"> · </span>
+    <a href="{{ url_for('admin_home') }}">Forside · baggrunde</a>
+</p>
 <h1>Godkend brugere</h1>
 
 {% if users %}

@@ -84,11 +84,11 @@ body {
 }
 
 .hero {
-    background: var(--surface);
-    border-radius: 18px;
-    padding: 24px;
-    margin-bottom: 16px;
-    box-shadow: var(--shadow);
+    background: transparent;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 0;
+    box-shadow: none;
 }
 
 .hero h1 {
@@ -171,6 +171,107 @@ body {
 .upcoming-events__title-link:hover {
     text-decoration: underline;
     text-underline-offset: 4px;
+}
+
+/* --- Forside-bokse med baggrundsbillede --- */
+.home-panel {
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+}
+
+.home-panel--hero {
+    margin-bottom: 16px;
+    min-height: 160px;
+}
+
+.home-panel--block {
+    margin-bottom: 16px;
+    min-height: 140px;
+}
+
+.home-panel--card {
+    min-height: 200px;
+    height: 100%;
+}
+
+.grid > .home-panel {
+    margin-bottom: 0;
+}
+
+.home-panel__photo {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    z-index: 0;
+}
+
+.home-panel__edge-fade {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    border-radius: 18px;
+    box-shadow:
+        inset 0 0 0 1px rgba(0, 0, 0, 0.12),
+        inset 0 0 36px 22px var(--bg),
+        inset 0 0 72px 40px rgba(11, 15, 13, 0.55);
+}
+
+.home-panel__inner {
+    position: relative;
+    z-index: 2;
+    padding: 18px 20px;
+    min-height: inherit;
+    background: linear-gradient(
+        105deg,
+        rgba(11, 15, 13, 0.94) 0%,
+        rgba(11, 15, 13, 0.82) 42%,
+        rgba(11, 15, 13, 0.62) 100%
+    );
+}
+
+.home-panel--no-photo .home-panel__inner {
+    background: var(--surface);
+}
+
+.home-panel--has-photo .home-panel__content,
+.home-panel--has-photo .hero {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.home-panel--hero.home-panel--has-photo .home-panel__inner {
+    max-width: min(560px, 78%);
+}
+
+.home-panel--has-photo .home-panel__content h2,
+.home-panel--has-photo .home-panel__content .meta-number {
+    color: var(--text);
+}
+
+.home-panel--has-photo .round-highlights__label {
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.home-panel.forum-box {
+    background: transparent;
+    padding: 0;
+    margin-bottom: 16px;
+    box-shadow: none;
+    border: none;
+}
+
+.admin-home-preview {
+    height: 120px;
+    border-radius: 12px;
+    background-size: cover;
+    background-position: center;
+    border: 1px solid var(--border);
 }
 
 .upcoming-events__layout {
@@ -1184,11 +1285,15 @@ th.th-sortable {
 }
 
 .card,
-.hero,
 .forum-box,
 .stat-box,
 .chart-card,
 .player-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+}
+
+.hero:not(.home-panel__content) {
     background: var(--surface);
     border: 1px solid var(--border);
 }

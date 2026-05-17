@@ -158,6 +158,44 @@ def backfill_inline_hero_images_to_assets():
 ensure_course_hero_assets()
 backfill_inline_hero_images_to_assets()
 
+HOME_PANEL_DEFINITIONS = [
+    ("hero", "Hero (titel øverst)", 10),
+    ("highlights", "Highlights · seneste runde", 20),
+    ("top_points", "Top 3 – Point", 30),
+    ("top_money", "Top 3 – Fake money", 40),
+    ("forum", "Forum", 50),
+    ("admin", "Admin-boks", 60),
+]
+HOME_PANEL_SLUGS = {slug for slug, _, _ in HOME_PANEL_DEFINITIONS}
+
+
+def ensure_home_panels_table():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                create table if not exists home_panels (
+                    slug text primary key,
+                    label text not null,
+                    sort_order int not null default 0,
+                    hero_asset_id integer references course_hero_assets(id) on delete set null
+                );
+                """
+            )
+            for slug, label, sort_order in HOME_PANEL_DEFINITIONS:
+                cur.execute(
+                    """
+                    insert into home_panels (slug, label, sort_order)
+                    values (%s, %s, %s)
+                    on conflict (slug) do nothing;
+                    """,
+                    (slug, label, sort_order),
+                )
+        conn.commit()
+
+
+ensure_home_panels_table()
+
 
 def get_or_create_course_hero_asset(cur, image_bytes: bytes, mime: str) -> int:
     digest = hashlib.sha256(image_bytes).hexdigest()
@@ -187,9 +225,39 @@ def delete_orphan_course_hero_assets(cur):
         delete from course_hero_assets a
         where not exists (
             select 1 from upcoming_events e where e.hero_asset_id = a.id
+        )
+        and not exists (
+            select 1 from home_panels hp where hp.hero_asset_id = a.id
         );
         """
     )
+
+
+def fetch_home_backgrounds(cur):
+    cur.execute(
+        """
+        select slug, hero_asset_id
+        from home_panels
+        where hero_asset_id is not null;
+        """
+    )
+    return {row[0]: row[1] for row in cur.fetchall()}
+
+
+def list_hero_assets_for_admin(cur):
+    cur.execute(
+        """
+        select
+            a.id,
+            a.byte_size,
+            a.content_sha256,
+            (select count(*)::int from upcoming_events e where e.hero_asset_id = a.id)
+            + (select count(*)::int from home_panels hp where hp.hero_asset_id = a.id) as ref_count
+        from course_hero_assets a
+        order by a.id desc;
+        """
+    )
+    return cur.fetchall()
 
 
 MONTH_NAMES_DA = (
@@ -980,6 +1048,8 @@ def home():
             if latest_round:
                 round_highlights = fetch_round_highlights(cur, latest_round[0])
 
+            home_backgrounds = fetch_home_backgrounds(cur)
+
     cal_events = [
         {"y": r[2].year, "m": r[2].month, "d": r[2].day, "t": r[1]}
         for r in upcoming_for_calendar
@@ -1009,6 +1079,7 @@ def home():
         upcoming_bg_event_id=upcoming_bg_event_id,
         upcoming_cal_json=upcoming_cal_json,
         round_highlights=round_highlights,
+        home_backgrounds=home_backgrounds,
     )
 
 @app.get("/new")
@@ -2108,6 +2179,133 @@ def upcoming_event_course_image(event_id):
         as_attachment=False,
         download_name=f"event-{event_id}-course",
     )
+
+
+@app.get("/home-panel/<slug>/image")
+def home_panel_image(slug):
+    if slug not in HOME_PANEL_SLUGS:
+        return "Billede ikke fundet", 404
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select a.image_data, a.image_mime_type
+                from home_panels hp
+                join course_hero_assets a on a.id = hp.hero_asset_id
+                where hp.slug = %s;
+                """,
+                (slug,),
+            )
+            row = cur.fetchone()
+
+    if not row or not row[0]:
+        return "Billede ikke fundet", 404
+
+    data, mime = row
+    return send_file(
+        io.BytesIO(data),
+        mimetype=mime or "image/webp",
+        as_attachment=False,
+        download_name=f"home-{slug}",
+    )
+
+
+@app.get("/admin/forside")
+@admin_required
+def admin_home():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select
+                    hp.slug,
+                    hp.label,
+                    hp.hero_asset_id,
+                    a.byte_size
+                from home_panels hp
+                left join course_hero_assets a on a.id = hp.hero_asset_id
+                order by hp.sort_order, hp.slug;
+                """
+            )
+            panels = cur.fetchall()
+            hero_assets = list_hero_assets_for_admin(cur)
+
+    return render_template(
+        "admin_home.html",
+        panels=panels,
+        hero_assets=hero_assets,
+    )
+
+
+@app.post("/admin/forside/<slug>")
+@admin_required
+def admin_home_panel_update(slug):
+    if slug not in HOME_PANEL_SLUGS:
+        return "Ukendt boks", 404
+
+    if request.form.get("clear_background") == "1":
+        with psycopg.connect(DB_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    update home_panels
+                    set hero_asset_id = null
+                    where slug = %s;
+                    """,
+                    (slug,),
+                )
+                delete_orphan_course_hero_assets(cur)
+            conn.commit()
+        return redirect(url_for("admin_home"))
+
+    hero_asset_id = None
+    image_file = request.files.get("course_image")
+    if image_file and image_file.filename:
+        raw = image_file.read()
+        if raw and len(raw) <= 8 * 1024 * 1024:
+            try:
+                image_bytes, mime_store = compress_course_hero_image(raw)
+            except ValueError:
+                return redirect(url_for("admin_home"))
+            with psycopg.connect(DB_URL) as conn:
+                with conn.cursor() as cur:
+                    hero_asset_id = get_or_create_course_hero_asset(
+                        cur, image_bytes, mime_store
+                    )
+                conn.commit()
+
+    if hero_asset_id is None:
+        reuse_raw = (request.form.get("reuse_hero_asset_id") or "").strip()
+        if reuse_raw:
+            try:
+                candidate = int(reuse_raw)
+            except ValueError:
+                candidate = None
+            if candidate is not None:
+                with psycopg.connect(DB_URL) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "select id from course_hero_assets where id = %s;",
+                            (candidate,),
+                        )
+                        if cur.fetchone():
+                            hero_asset_id = candidate
+
+    if hero_asset_id is not None:
+        with psycopg.connect(DB_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    update home_panels
+                    set hero_asset_id = %s
+                    where slug = %s;
+                    """,
+                    (hero_asset_id, slug),
+                )
+            conn.commit()
+
+    return redirect(url_for("admin_home"))
 
 
 @app.get("/admin/events")

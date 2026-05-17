@@ -1,17 +1,19 @@
 {% extends "base.html" %}
+{% from "_home_panel_macro.html" import home_panel with context %}
 
 {% block title %}MuchBetter Golf Liga{% endblock %}
 
 {% block content %}
-<div class="hero">
+{% call home_panel('hero', 'home-panel--hero') %}
+<div class="hero home-panel__content">
     <h1>MuchBetter Golf Liga</h1>
     <p>Overblik over runder, statistik og stilling.</p>
-
     <div class="hero-actions">
         <a href="/rounds" class="secondary-btn">Se alle runder</a>
         <a href="/stats" class="secondary-btn">Se leaderboard</a>
     </div>
 </div>
+{% endcall %}
 
 <section class="upcoming-events {% if upcoming_bg_event_id %}upcoming-events--has-photo{% else %}upcoming-events--no-photo{% endif %}">
     {% if upcoming_bg_event_id %}
@@ -139,7 +141,8 @@
 </section>
 
 {% if latest_round and round_highlights %}
-<div class="card round-highlights">
+{% call home_panel('highlights', 'home-panel--block') %}
+<div class="round-highlights home-panel__content">
     <h2>Highlights · seneste runde</h2>
     <p class="round-highlights__meta muted">
         {{ latest_round[1].strftime('%d.%m.%Y') }} · {{ latest_round[2] }}
@@ -154,12 +157,13 @@
     </ul>
     <a href="/round/{{ latest_round[0] }}" class="secondary-btn">Se fuldt resultat</a>
 </div>
+{% endcall %}
 {% endif %}
 
 <div class="grid">
-    <div class="card">
+    {% call home_panel('top_points', 'home-panel--card') %}
+    <div class="home-panel__content">
         <h2>Top 3 – Point</h2>
-
         {% if top_points %}
             <div class="list">
                 {% for p in top_points %}
@@ -175,7 +179,6 @@
                         </div>
                         <div class="value-wrap">
                             <div>{{ p[3] }} point</div>
-
                             {% if p[6] == "up" %}
                                 <span class="movement up">▲ {{ p[7] }}</span>
                             {% elif p[6] == "down" %}
@@ -193,10 +196,11 @@
             <div class="muted">Ingen data endnu.</div>
         {% endif %}
     </div>
+    {% endcall %}
 
-    <div class="card">
+    {% call home_panel('top_money', 'home-panel--card') %}
+    <div class="home-panel__content">
         <h2>Top 3 – Fake money</h2>
-
         {% if top_money %}
             <div class="list">
                 {% for p in top_money %}
@@ -212,7 +216,6 @@
                         </div>
                         <div class="value-wrap">
                             <div>{{ p[3] }} kr</div>
-
                             {% if p[6] == "up" %}
                                 <span class="movement up">▲ {{ p[7] }}</span>
                             {% elif p[6] == "down" %}
@@ -230,47 +233,32 @@
             <div class="muted">Ingen data endnu.</div>
         {% endif %}
     </div>
+    {% endcall %}
 </div>
 
-<div class="grid">
-    <div class="card">
-        <div class="muted">Antal registrerede runder</div>
-        <div class="meta-number">{{ total_rounds }}</div>
-    </div>
 
-    <div class="card">
-        <h2>Seneste runde</h2>
-        {% if latest_round %}
-            <div class="list">
-                <div><b>Dato:</b> {{ latest_round[1] }}</div>
-                <div><b>Bane:</b> {{ latest_round[2] }}</div>
-                <div style="margin-top: 12px;">
-                    <a href="/round/{{ latest_round[0] }}" class="secondary-btn">Se resultat</a>
-                </div>
-            </div>
-        {% else %}
-            <div class="muted">Ingen runder endnu.</div>
-        {% endif %}
-    </div>
-</div>
-
-<div class="forum-box">
+{% call home_panel('forum', 'home-panel--block forum-box') %}
+<div class="home-panel__content">
     <h2>Forum</h2>
-
     <div class="muted">
         Diskuter runder, resultater, øl, turneringer, afbud og alt andet af interesse.
     </div>
-
     <a href="/forum" class="button-link" style="margin-top: 10px; display: inline-block;">
         Gå til forum
     </a>
 </div>
+{% endcall %}
 
-<div class="card">
+{% call home_panel('admin', 'home-panel--block') %}
+<div class="home-panel__content">
     <h2>Admin</h2>
-    <div class="muted">Administration af runder.</div>
-    <div style="margin-top: 12px;">
+    <div class="muted">Administration af runder og forsiden.</div>
+    <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px;">
         <a href="/new" class="secondary-btn">Opret ny runde</a>
+        {% if session.get('is_admin') %}
+        <a href="{{ url_for('admin_home') }}" class="secondary-btn">Forside · baggrunde</a>
+        {% endif %}
     </div>
 </div>
+{% endcall %}
 {% endblock %}
