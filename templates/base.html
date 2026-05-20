@@ -72,6 +72,38 @@
                     </a>
                 </nav>
 
+                <section class="online-card sidebar-updates-card">
+                    <h3>Opdateringer</h3>
+                    {% if session.get('is_admin') %}
+                    <form method="post" action="{{ url_for('admin_sidebar_update') }}" class="sidebar-update-form">
+                        <label class="sr-only" for="sidebar-update-body">Ny opdatering</label>
+                        <textarea
+                            id="sidebar-update-body"
+                            name="body"
+                            rows="3"
+                            maxlength="500"
+                            placeholder="Skriv en kort opdatering…"
+                            required
+                        ></textarea>
+                        <button type="submit" class="sidebar-update-btn">Send opdatering</button>
+                    </form>
+                    {% endif %}
+                    {% if sidebar_updates %}
+                        <ul class="sidebar-updates-list">
+                            {% for u in sidebar_updates %}
+                            <li class="sidebar-update-item">
+                                <p class="sidebar-update-body">{{ u[1] }}</p>
+                                <p class="sidebar-update-meta muted">
+                                    {{ u[3].strftime('%d.%m.%Y %H:%M') }} · {{ u[2] }}
+                                </p>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% elif not session.get('is_admin') %}
+                        <p class="muted">Ingen opdateringer endnu.</p>
+                    {% endif %}
+                </section>
+
                 <section class="online-card">
                     <h3>Hvem er online:</h3>
                     {% if online_users %}

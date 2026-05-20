@@ -128,6 +128,38 @@ def ensure_event_rsvps_table():
 ensure_event_rsvps_table()
 
 
+def ensure_sidebar_updates_table():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                create table if not exists sidebar_updates (
+                    id serial primary key,
+                    body text not null,
+                    author_username text not null,
+                    created_at timestamptz not null default now()
+                );
+                """
+            )
+        conn.commit()
+
+
+ensure_sidebar_updates_table()
+
+
+def fetch_sidebar_updates(cur, limit=8):
+    cur.execute(
+        """
+        select id, body, author_username, created_at
+        from sidebar_updates
+        order by created_at desc, id desc
+        limit %s;
+        """,
+        (limit,),
+    )
+    return cur.fetchall()
+
+
 def ensure_course_hero_assets():
     """Delte hero-billeder (én blob pr. unikt indhold) — mindre DB og ingen duplikat-upload."""
     with psycopg.connect(DB_URL) as conn:
@@ -422,10 +454,16 @@ def inject_layout_context():
     online_users = []
     if session.get("logged_in") and session.get("username"):
         online_users.append(session["username"])
-    ctx = {"online_users": online_users, "admin_pending_users": [], "admin_players": []}
-    if session.get("is_admin"):
-        with psycopg.connect(DB_URL) as conn:
-            with conn.cursor() as cur:
+    ctx = {
+        "online_users": online_users,
+        "admin_pending_users": [],
+        "admin_players": [],
+        "sidebar_updates": [],
+    }
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            ctx["sidebar_updates"] = fetch_sidebar_updates(cur)
+            if session.get("is_admin"):
                 cur.execute("""
                     select id, username, created_at
                     from users
@@ -2289,6 +2327,32 @@ def fetch_event_detail(cur, event_id):
         "not_attending": not_attending,
         "pending": pending,
     }
+
+
+@app.post("/admin/sidebar-update")
+@admin_required
+def admin_sidebar_update():
+    body = request.form.get("body", "").strip()
+    if not body:
+        return redirect(request.referrer or url_for("home"))
+
+    if len(body) > 500:
+        body = body[:500]
+
+    author = session.get("username") or "Admin"
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into sidebar_updates (body, author_username)
+                values (%s, %s);
+                """,
+                (body, author),
+            )
+        conn.commit()
+
+    return redirect(request.referrer or url_for("home"))
 
 
 @app.get("/begivenheder")
