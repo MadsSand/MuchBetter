@@ -30,8 +30,10 @@
                     {% if upcoming_next_three %}
                         {% for ev in upcoming_next_three %}
                         <li class="upcoming-events__item{% if ev[3] %} upcoming-events__item--emphasis{% endif %}">
-                            <span class="upcoming-events__item-date">{{ ev[2].strftime('%d.%m.%Y') }}</span>
-                            <span class="upcoming-events__item-title">{{ ev[1] }}</span>
+                            <a href="{{ url_for('event_detail_page', event_id=ev[0]) }}" class="upcoming-events__item-link">
+                                <span class="upcoming-events__item-date">{{ ev[2].strftime('%d.%m.%Y') }}</span>
+                                <span class="upcoming-events__item-title">{{ ev[1] }}</span>
+                            </a>
                         </li>
                         {% endfor %}
                     {% else %}
@@ -215,7 +217,7 @@
                             <a class="player-link" href="/player/{{ p[0] }}">{{ p[1] }}</a>
                         </div>
                         <div class="value-wrap">
-                            <div>{{ p[3] }} kr</div>
+                            <div>{{ p[3]|fake_money }} kr</div>
                             {% if p[6] == "up" %}
                                 <span class="movement up">▲ {{ p[7] }}</span>
                             {% elif p[6] == "down" %}

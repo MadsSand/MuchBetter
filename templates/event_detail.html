@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}{{ event[1] }}{% endblock %}
+
+{% block content %}
+<div class="event-detail">
+    <p class="event-detail__back muted">
+        <a href="{{ url_for('upcoming_events_page') }}">← Alle begivenheder</a>
+    </p>
+
+    <article class="event-banner event-detail__hero{% if event[4] %} event-banner--has-photo{% else %} event-banner--no-photo{% endif %}{% if event[3] %} event-banner--emphasis{% endif %}">
+        {% if event[4] %}
+        <div class="event-banner__photo" style="background-image: url('{{ url_for('upcoming_event_course_image', event_id=event[0]) }}');" role="presentation"></div>
+        <div class="event-banner__edge-fade" aria-hidden="true"></div>
+        {% endif %}
+        <div class="event-banner__inner">
+            <time class="event-banner__date" datetime="{{ event[2].isoformat() }}">{{ event[2].strftime('%d.%m.%Y') }}</time>
+            <h1 class="event-banner__title">{{ event[1] }}</h1>
+            {% if is_past %}
+                <p class="event-detail__badge event-detail__badge--past">Overstået</p>
+            {% endif %}
+        </div>
+    </article>
+
+    <div class="card event-detail__rsvp">
+        <h2>Din tilmelding</h2>
+        {% if can_rsvp %}
+            <div class="event-rsvp-actions">
+                <form method="post" action="{{ url_for('event_rsvp', event_id=event[0]) }}">
+                    <input type="hidden" name="status" value="yes">
+                    <button type="submit" class="event-rsvp-btn{% if my_rsvp == 'yes' %} event-rsvp-btn--active{% endif %}">
+                        Deltager
+                    </button>
+                </form>
+                <form method="post" action="{{ url_for('event_rsvp', event_id=event[0]) }}">
+                    <input type="hidden" name="status" value="no">
+                    <button type="submit" class="event-rsvp-btn event-rsvp-btn--no{% if my_rsvp == 'no' %} event-rsvp-btn--active{% endif %}">
+                        Deltager ikke
+                    </button>
+                </form>
+            </div>
+            {% if my_rsvp %}
+                <p class="muted event-detail__rsvp-hint">Du kan skifte svar når som helst før begivenheden.</p>
+            {% else %}
+                <p class="muted event-detail__rsvp-hint">Vælg om du deltager — så kan de andre se det.</p>
+            {% endif %}
+        {% else %}
+            <p class="muted">{{ rsvp_blocked_reason }}</p>
+            {% if not session.get('logged_in') %}
+                <a href="{{ url_for('login') }}" class="secondary-btn" style="margin-top: 12px; display: inline-block;">Log ind</a>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    <div class="event-detail__lists">
+        <div class="card event-detail__list-card">
+            <h2>Deltager <span class="event-detail__count">{{ attending|length }}</span></h2>
+            {% if attending %}
+                <div class="list">
+                    {% for p in attending %}
+                    <div class="list-row">
+                        <div class="players-list-name">
+                            {% if p[2] %}
+                                <img class="mini-avatar" src="/player/{{ p[0] }}/avatar" alt="">
+                            {% else %}
+                                <span class="mini-avatar-fallback">{{ p[1][0] }}</span>
+                            {% endif %}
+                            <a class="player-link" href="{{ url_for('player_page', player_id=p[0]) }}">{{ p[1] }}</a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="muted">Ingen har meldt deltagelse endnu.</p>
+            {% endif %}
+        </div>
+
+        <div class="card event-detail__list-card">
+            <h2>Deltager ikke <span class="event-detail__count">{{ not_attending|length }}</span></h2>
+            {% if not_attending %}
+                <div class="list">
+                    {% for p in not_attending %}
+                    <div class="list-row">
+                        <div class="players-list-name">
+                            {% if p[2] %}
+                                <img class="mini-avatar" src="/player/{{ p[0] }}/avatar" alt="">
+                            {% else %}
+                                <span class="mini-avatar-fallback">{{ p[1][0] }}</span>
+                            {% endif %}
+                            <a class="player-link" href="{{ url_for('player_page', player_id=p[0]) }}">{{ p[1] }}</a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="muted">Ingen har meldt fravær endnu.</p>
+            {% endif %}
+        </div>
+
+        <div class="card event-detail__list-card">
+            <h2>Ikke svaret <span class="event-detail__count">{{ pending|length }}</span></h2>
+            {% if pending %}
+                <div class="list">
+                    {% for p in pending %}
+                    <div class="list-row">
+                        <div class="players-list-name">
+                            {% if p[2] %}
+                                <img class="mini-avatar" src="/player/{{ p[0] }}/avatar" alt="">
+                            {% else %}
+                                <span class="mini-avatar-fallback">{{ p[1][0] }}</span>
+                            {% endif %}
+                            <a class="player-link" href="{{ url_for('player_page', player_id=p[0]) }}">{{ p[1] }}</a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="muted">Alle aktive spillere har svaret.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

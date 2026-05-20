@@ -31,6 +31,30 @@ if not SECRET_KEY:
 
 app.config["SECRET_KEY"] = SECRET_KEY
 
+PRIZE_POOL_DEFAULT = 5000
+LEGACY_PRIZE_POOL = 5_000_000
+
+
+def format_fake_money(value):
+    if value is None:
+        return "0"
+    amount = int(round(float(value)))
+    text = str(amount)
+    if len(text) <= 3:
+        return text
+    parts = []
+    while len(text) > 3:
+        parts.insert(0, text[-3:])
+        text = text[:-3]
+    if text:
+        parts.insert(0, text)
+    return ".".join(parts)
+
+
+@app.template_filter("fake_money")
+def fake_money_filter(value):
+    return format_fake_money(value)
+
 
 def ensure_player_profile_columns():
     with psycopg.connect(DB_URL) as conn:
@@ -79,6 +103,29 @@ def ensure_upcoming_events_table():
 
 
 ensure_upcoming_events_table()
+
+
+def ensure_event_rsvps_table():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                create table if not exists event_rsvps (
+                    event_id integer not null
+                        references upcoming_events(id) on delete cascade,
+                    player_id integer not null
+                        references players(id) on delete cascade,
+                    status text not null
+                        check (status in ('yes', 'no')),
+                    updated_at timestamptz not null default now(),
+                    primary key (event_id, player_id)
+                );
+                """
+            )
+        conn.commit()
+
+
+ensure_event_rsvps_table()
 
 
 def ensure_course_hero_assets():
@@ -511,7 +558,7 @@ def fetch_round_highlights(cur, round_id):
     )
     row = cur.fetchone()
     if row:
-        add("Flest fake money", row[0], f"{row[1]} kr")
+        add("Flest fake money", row[0], f"{format_fake_money(row[1])} kr")
 
     cur.execute(
         """
@@ -585,13 +632,15 @@ def build_chart_series(progress_rows):
             float(row[5]) if row[5] is not None else 0 for row in progress_rows
         ],
         "chart_round_money": [
-            float(row[6]) if row[6] is not None else 0 for row in progress_rows
+            int(round(float(row[6]))) if row[6] is not None else 0
+            for row in progress_rows
         ],
         "chart_running_points": [
             float(row[8]) if row[8] is not None else 0 for row in progress_rows
         ],
         "chart_running_money": [
-            float(row[9]) if row[9] is not None else 0 for row in progress_rows
+            int(round(float(row[9]))) if row[9] is not None else 0
+            for row in progress_rows
         ],
     }
 
@@ -1407,7 +1456,7 @@ def recalculate_round(cur, round_id):
         update round_players rp
         set money_rank = round(
             (rp_pool.prize_pool * (tp.total_pct / 100.0)) / tp.tie_count,
-            2
+            0
         )
         from tie_prizes tp
         cross join round_pool rp_pool
@@ -1430,6 +1479,44 @@ def recalculate_round(cur, round_id):
         """,
         (round_id,)
     )
+
+
+def ensure_fake_money_scale():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                alter table rounds
+                alter column prize_pool set default {PRIZE_POOL_DEFAULT};
+                """
+            )
+            cur.execute(
+                """
+                select count(*)
+                from rounds
+                where prize_pool >= %s;
+                """,
+                (LEGACY_PRIZE_POOL,),
+            )
+            if cur.fetchone()[0] == 0:
+                conn.commit()
+                return
+
+            cur.execute(
+                """
+                update rounds
+                set prize_pool = %s
+                where prize_pool >= %s;
+                """,
+                (PRIZE_POOL_DEFAULT, LEGACY_PRIZE_POOL),
+            )
+            cur.execute("select id from rounds order by id;")
+            for (round_id,) in cur.fetchall():
+                recalculate_round(cur, round_id)
+        conn.commit()
+
+
+ensure_fake_money_scale()
 
 def upsert_round_players(cur, round_id, form_data):
     cur.execute(
@@ -2120,6 +2207,90 @@ def approve_user(user_id):
     return redirect_after_admin_action()
 
 
+def fetch_event_detail(cur, event_id):
+    cur.execute(
+        """
+        select
+            ue.id,
+            ue.title,
+            ue.event_date,
+            ue.emphasis,
+            (
+                cha.image_data is not null
+                or ue.course_image_data is not null
+            ) as has_image
+        from upcoming_events ue
+        left join course_hero_assets cha on cha.id = ue.hero_asset_id
+        where ue.id = %s;
+        """,
+        (event_id,),
+    )
+    event = cur.fetchone()
+    if not event:
+        return None
+
+    cur.execute(
+        """
+        select
+            p.id,
+            p.full_name,
+            p.avatar_data is not null as has_avatar
+        from event_rsvps er
+        join players p on p.id = er.player_id
+        where er.event_id = %s
+          and er.status = 'yes'
+          and p.is_active = true
+        order by p.full_name;
+        """,
+        (event_id,),
+    )
+    attending = cur.fetchall()
+
+    cur.execute(
+        """
+        select
+            p.id,
+            p.full_name,
+            p.avatar_data is not null as has_avatar
+        from event_rsvps er
+        join players p on p.id = er.player_id
+        where er.event_id = %s
+          and er.status = 'no'
+          and p.is_active = true
+        order by p.full_name;
+        """,
+        (event_id,),
+    )
+    not_attending = cur.fetchall()
+
+    cur.execute(
+        """
+        select
+            p.id,
+            p.full_name,
+            p.avatar_data is not null as has_avatar
+        from players p
+        where p.is_active = true
+          and not exists (
+              select 1
+              from event_rsvps er
+              where er.event_id = %s
+                and er.player_id = p.id
+          )
+        order by p.full_name;
+        """,
+        (event_id,),
+    )
+    pending = cur.fetchall()
+
+    return {
+        "event": event,
+        "attending": attending,
+        "not_attending": not_attending,
+        "pending": pending,
+    }
+
+
 @app.get("/begivenheder")
 def upcoming_events_page():
     with psycopg.connect(DB_URL) as conn:
@@ -2144,6 +2315,100 @@ def upcoming_events_page():
             events = cur.fetchall()
 
     return render_template("upcoming_events.html", events=events)
+
+
+@app.get("/begivenheder/<int:event_id>")
+def event_detail_page(event_id):
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            detail = fetch_event_detail(cur, event_id)
+
+    if not detail:
+        return "Begivenheden blev ikke fundet", 404
+
+    event = detail["event"]
+    my_rsvp = None
+    can_rsvp = False
+    rsvp_blocked_reason = None
+
+    if session.get("logged_in"):
+        player_id = session.get("player_id")
+        if not player_id:
+            rsvp_blocked_reason = "Din bruger er ikke koblet til en spiller endnu."
+        elif event[2] < date.today():
+            rsvp_blocked_reason = "Begivenheden er overstået — tilmelding er lukket."
+        else:
+            can_rsvp = True
+            with psycopg.connect(DB_URL) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        select status
+                        from event_rsvps
+                        where event_id = %s and player_id = %s;
+                        """,
+                        (event_id, player_id),
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        my_rsvp = row[0]
+    else:
+        rsvp_blocked_reason = "Log ind for at melde deltagelse."
+
+    return render_template(
+        "event_detail.html",
+        event=event,
+        attending=detail["attending"],
+        not_attending=detail["not_attending"],
+        pending=detail["pending"],
+        my_rsvp=my_rsvp,
+        can_rsvp=can_rsvp,
+        rsvp_blocked_reason=rsvp_blocked_reason,
+        is_past=event[2] < date.today(),
+    )
+
+
+@app.post("/begivenheder/<int:event_id>/rsvp")
+@login_required
+def event_rsvp(event_id):
+    player_id = session.get("player_id")
+    if not player_id:
+        return "Din bruger er ikke koblet til en spiller endnu", 403
+
+    status = request.form.get("status", "").strip()
+    if status not in ("yes", "no"):
+        return redirect(url_for("event_detail_page", event_id=event_id))
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select event_date
+                from upcoming_events
+                where id = %s;
+                """,
+                (event_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return "Begivenheden blev ikke fundet", 404
+            if row[0] < date.today():
+                return redirect(url_for("event_detail_page", event_id=event_id))
+
+            cur.execute(
+                """
+                insert into event_rsvps (event_id, player_id, status, updated_at)
+                values (%s, %s, %s, now())
+                on conflict (event_id, player_id)
+                do update set
+                    status = excluded.status,
+                    updated_at = now();
+                """,
+                (event_id, player_id, status),
+            )
+        conn.commit()
+
+    return redirect(url_for("event_detail_page", event_id=event_id))
 
 
 @app.get("/upcoming-events/<int:event_id>/course-image")
@@ -2478,7 +2743,7 @@ def my_page():
 
             cur.execute(
                 """
-                select title, event_date
+                select id, title, event_date
                 from upcoming_events
                 where event_date >= current_date
                 order by event_date asc, id asc

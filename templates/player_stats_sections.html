@@ -31,7 +31,7 @@
 
     <div class="stat-box">
         <div class="stat-label">Total fake money</div>
-        <div class="stat-value">{{ player[8] }}</div>
+        <div class="stat-value">{{ player[8]|fake_money }} kr</div>
     </div>
 </div>
 
@@ -86,7 +86,7 @@
                 <td>{{ r[3] }}</td>
                 <td>{{ r[4] }}</td>
                 <td>{{ r[5] }}</td>
-                <td>{{ r[6] }}</td>
+                <td>{{ r[6]|fake_money }}</td>
             </tr>
             {% endfor %}
         </table>

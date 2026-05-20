@@ -9,7 +9,7 @@
     <b>Dato:</b> {{ round_date }}<br>
     <b>Bane:</b> {{ course_name }}<br>
     <b>Sæson:</b> {{ season_year }}<br>
-    <b>Dagens præmiepulje:</b> {{ prize_pool }}
+    <b>Dagens præmiepulje:</b> {{ prize_pool|fake_money }} kr
 </div>
 
 <div class="card">
@@ -33,7 +33,7 @@
                 <td>{{ r[2] }}</td>
                 <td>{{ r[3] if r[3] is not none else "" }}</td>
                 <td>{{ r[5] if r[5] is not none else "" }}</td>
-                <td>{{ r[6] if r[6] is not none else "" }}</td>
+                <td>{{ r[6]|fake_money if r[6] is not none else "" }}</td>
                 <td>{{ r[7] if r[7] is not none else "" }}</td>
             </tr>
             {% endfor %}
@@ -58,7 +58,7 @@
                 <td>{{ loop.index }}</td>
                 <td><a class="player-link" href="/player/{{ r[0] }}">{{ r[1] }}</a></td>
                 <td>{{ r[2] }}</td>
-                <td>{{ r[3] }}</td>
+                <td>{{ r[3]|fake_money }}</td>
                 <td>{{ r[4] }}</td>
             </tr>
             {% endfor %}

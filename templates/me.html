@@ -39,9 +39,10 @@
         <div class="card">
             <h2>Næste begivenhed</h2>
             {% if next_event %}
-                <p><strong>{{ next_event[0] }}</strong></p>
-                <p class="muted">{{ next_event[1].strftime('%d.%m.%Y') }}</p>
-                <a href="{{ url_for('upcoming_events_page') }}" class="secondary-btn" style="margin-top: 12px; display: inline-block;">Alle begivenheder</a>
+                <p><strong>{{ next_event[1] }}</strong></p>
+                <p class="muted">{{ next_event[2].strftime('%d.%m.%Y') }}</p>
+                <a href="{{ url_for('event_detail_page', event_id=next_event[0]) }}" class="secondary-btn" style="margin-top: 12px; display: inline-block;">Tilmeld / se deltagere</a>
+                <a href="{{ url_for('upcoming_events_page') }}" class="muted" style="margin-top: 8px; display: inline-block; font-size: 14px;">Alle begivenheder</a>
             {% else %}
                 <p class="muted">Ingen planlagte begivenheder.</p>
             {% endif %}
