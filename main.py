@@ -3,6 +3,8 @@ import hashlib
 import psycopg
 import os
 import io
+import secrets
+import string
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlparse
@@ -377,6 +379,25 @@ def format_handicap_dk(value) -> str | None:
     if value is None:
         return None
     return f"{float(value):.1f}".replace(".", ",")
+
+
+def generate_temporary_password(length=10):
+    alphabet = string.ascii_letters + string.digits
+    alphabet = alphabet.replace("0", "").replace("O", "").replace("l", "").replace("I", "")
+    return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def pop_password_reset_notice():
+    notice = session.pop("admin_password_reset", None)
+    if not notice:
+        return None
+    if not isinstance(notice, dict):
+        return None
+    username = notice.get("username")
+    password = notice.get("password")
+    if not username or not password:
+        return None
+    return {"username": username, "password": password}
 
 
 def redirect_after_admin_action():
@@ -2194,7 +2215,21 @@ def admin_users():
                 where is_approved = false
                 order by created_at;
             """)
-            users = cur.fetchall()
+            pending_users = cur.fetchall()
+            cur.execute(
+                """
+                select
+                    u.id,
+                    u.username,
+                    u.created_at,
+                    p.full_name
+                from users u
+                left join players p on p.id = u.player_id
+                where u.is_approved = true
+                order by u.username;
+                """
+            )
+            approved_users = cur.fetchall()
             cur.execute("""
                 select id, full_name
                 from players
@@ -2203,7 +2238,14 @@ def admin_users():
             """)
             admin_players = cur.fetchall()
 
-    return render_template("admin_users.html", users=users, admin_players=admin_players)
+    return render_template(
+        "admin_users.html",
+        pending_users=pending_users,
+        approved_users=approved_users,
+        admin_players=admin_players,
+        password_reset_notice=pop_password_reset_notice(),
+        password_reset_error=session.pop("admin_password_reset_error", None),
+    )
 
 @app.post("/admin/users/<int:user_id>/approve")
 @admin_required
@@ -2243,6 +2285,51 @@ def approve_user(user_id):
         conn.commit()
 
     return redirect_after_admin_action()
+
+
+@app.post("/admin/users/<int:user_id>/reset-password")
+@admin_required
+def admin_reset_user_password(user_id):
+    generate_new = request.form.get("generate_password") == "on"
+    manual_password = request.form.get("new_password", "").strip()
+
+    if generate_new:
+        new_password = generate_temporary_password()
+    else:
+        if len(manual_password) < 6:
+            session["admin_password_reset_error"] = (
+                "Kodeord skal være mindst 6 tegn, eller vælg «Generer midlertidigt kodeord»."
+            )
+            return redirect(url_for("admin_users"))
+        if len(manual_password) > 128:
+            session["admin_password_reset_error"] = "Kodeord må højst være 128 tegn."
+            return redirect(url_for("admin_users"))
+        new_password = manual_password
+
+    password_hash = generate_password_hash(new_password)
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                update users
+                set password_hash = %s
+                where id = %s
+                returning username;
+                """,
+                (password_hash, user_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return "Brugeren blev ikke fundet", 404
+        conn.commit()
+
+    session.pop("admin_password_reset_error", None)
+    session["admin_password_reset"] = {
+        "username": row[0],
+        "password": new_password,
+    }
+    return redirect(url_for("admin_users"))
 
 
 def fetch_event_detail(cur, event_id):

@@ -8,13 +8,31 @@
     <span class="muted"> · </span>
     <a href="{{ url_for('admin_home') }}">Forside · baggrunde</a>
 </p>
-<h1>Godkend brugere</h1>
+<h1>Brugere</h1>
 
-{% if users %}
-    {% for user in users %}
+{% if password_reset_notice %}
+<div class="card admin-reset-notice" role="status">
+    <h2>Kodeord nulstillet</h2>
+    <p>
+        Bruger <strong>{{ password_reset_notice.username }}</strong> kan nu logge ind med dette midlertidige kodeord:
+    </p>
+    <p class="admin-reset-notice__password">{{ password_reset_notice.password }}</p>
+    <p class="muted">Giv kodeordet til brugeren (fx SMS eller mundtligt). De bør skifte det selv, når I har den funktion — indtil da kan du nulstille igen ved behov.</p>
+</div>
+{% endif %}
+
+{% if password_reset_error %}
+<div class="card admin-reset-error" role="alert">
+    <p>{{ password_reset_error }}</p>
+</div>
+{% endif %}
+
+<h2 class="admin-section-title">Afventer godkendelse</h2>
+{% if pending_users %}
+    {% for user in pending_users %}
         <div class="card">
             <p><strong>{{ user[1] }}</strong></p>
-            <p class="muted">Oprettet: {{ user[2] }}</p>
+            <p class="muted">Oprettet: {{ user[2].strftime('%d.%m.%Y %H:%M') if user[2] else '—' }}</p>
 
             <form method="post" action="{{ url_for('approve_user', user_id=user[0]) }}" class="admin-pending-form admin-pending-form--page">
                 <label class="admin-pending-label" for="player-pick-page-{{ user[0] }}">Kæd til spiller (valgfrit)</label>
@@ -26,11 +44,64 @@
                 </select>
                 <button type="submit" class="admin-pending-btn">Godkend</button>
             </form>
+
+            <details class="admin-reset-details">
+                <summary>Nulstil kodeord</summary>
+                {% with reset_user_id=user[0], reset_username=user[1] %}
+                    {% include "_admin_reset_password_form.html" %}
+                {% endwith %}
+            </details>
         </div>
     {% endfor %}
 {% else %}
     <div class="card">
-        <p>Ingen brugere afventer godkendelse.</p>
+        <p class="muted">Ingen brugere afventer godkendelse.</p>
     </div>
 {% endif %}
+
+<h2 class="admin-section-title">Godkendte brugere · nulstil kodeord</h2>
+<p class="muted admin-section-hint">Vælg et nyt kodeord eller lad systemet generere et midlertidigt, som du giver videre til spilleren.</p>
+
+{% if approved_users %}
+    {% for user in approved_users %}
+        <div class="card admin-user-card">
+            <p class="admin-user-card__name"><strong>{{ user[1] }}</strong></p>
+            <p class="muted admin-user-card__meta">
+                Oprettet {{ user[2].strftime('%d.%m.%Y') if user[2] else '—' }}
+                {% if user[3] %}
+                    · Spiller: {{ user[3] }}
+                {% else %}
+                    · Ikke koblet til spiller
+                {% endif %}
+            </p>
+            {% with reset_user_id=user[0], reset_username=user[1] %}
+                {% include "_admin_reset_password_form.html" %}
+            {% endwith %}
+        </div>
+    {% endfor %}
+{% else %}
+    <div class="card">
+        <p class="muted">Ingen godkendte brugere endnu.</p>
+    </div>
+{% endif %}
+
+<script>
+(function () {
+    document.querySelectorAll(".admin-reset-generate-check").forEach(function (cb) {
+        var input = document.getElementById(cb.getAttribute("data-target"));
+        if (!input) return;
+        function sync() {
+            if (cb.checked) {
+                input.value = "";
+                input.disabled = true;
+                input.removeAttribute("required");
+            } else {
+                input.disabled = false;
+            }
+        }
+        cb.addEventListener("change", sync);
+        sync();
+    });
+})();
+</script>
 {% endblock %}

@@ -1846,6 +1846,98 @@ input[type="text"] {
     color: var(--accent);
 }
 
+.admin-section-title {
+    margin: 28px 0 12px 0;
+    font-size: 20px;
+}
+
+.admin-section-hint {
+    margin: 0 0 14px 0;
+    font-size: 14px;
+}
+
+.admin-reset-notice {
+    margin-bottom: 18px;
+    border-color: var(--accent);
+}
+
+.admin-reset-notice h2 {
+    margin: 0 0 10px 0;
+    font-size: 18px;
+}
+
+.admin-reset-notice__password {
+    margin: 0 0 10px 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+.admin-reset-error {
+    margin-bottom: 18px;
+    border-color: #b45309;
+}
+
+.admin-reset-error p {
+    margin: 0;
+    color: #fbbf24;
+}
+
+.admin-user-card__name {
+    margin: 0 0 4px 0;
+}
+
+.admin-user-card__meta {
+    margin: 0 0 12px 0;
+    font-size: 13px;
+}
+
+.admin-reset-details {
+    margin-top: 14px;
+    font-size: 14px;
+}
+
+.admin-reset-details summary {
+    cursor: pointer;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.admin-reset-form {
+    margin-top: 12px;
+    max-width: 28rem;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.admin-reset-form .field {
+    margin: 0;
+}
+
+.admin-reset-input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: inherit;
+    font-size: 14px;
+}
+
+.admin-reset-generate {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
 .main-content {
     min-width: 0;
 }
