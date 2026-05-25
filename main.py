@@ -517,6 +517,14 @@ def can_edit_player(player_id: int) -> bool:
     return session.get("player_id") == player_id
 
 
+def can_change_own_password(player_id: int) -> bool:
+    return (
+        session.get("logged_in")
+        and session.get("user_id")
+        and session.get("player_id") == player_id
+    )
+
+
 def _highlight_names_with_score(rows, score_label="stableford"):
     names = [r[0] for r in rows]
     scores = [r[1] for r in rows if len(r) > 1 and r[1] is not None]
@@ -1971,7 +1979,69 @@ def player_settings(player_id):
         player_name=full_name,
         hcp_display=hcp_display,
         hcp_error=hcp_error,
+        can_change_password=can_change_own_password(player_id),
+        password_error=session.pop("password_change_error", None),
+        password_success=session.pop("password_change_success", None),
     )
+
+
+@app.post("/player/<int:player_id>/password")
+@login_required
+def change_player_password(player_id):
+    if not can_change_own_password(player_id):
+        return "Du kan kun ændre kodeord for din egen konto", 403
+
+    current_password = request.form.get("current_password", "")
+    new_password = request.form.get("new_password", "").strip()
+    confirm_password = request.form.get("confirm_password", "").strip()
+    settings_url = url_for("player_settings", player_id=player_id) + "#kodeord"
+
+    if len(new_password) < 6:
+        session["password_change_error"] = "Nyt kodeord skal være mindst 6 tegn."
+        return redirect(settings_url)
+
+    if len(new_password) > 128:
+        session["password_change_error"] = "Nyt kodeord må højst være 128 tegn."
+        return redirect(settings_url)
+
+    if new_password != confirm_password:
+        session["password_change_error"] = "Det nye kodeord og bekræftelsen matcher ikke."
+        return redirect(settings_url)
+
+    user_id = session.get("user_id")
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select password_hash
+                from users
+                where id = %s and player_id = %s;
+                """,
+                (user_id, player_id),
+            )
+            row = cur.fetchone()
+
+            if not row:
+                return "Brugerkontoen blev ikke fundet", 404
+
+            if not check_password_hash(row[0], current_password):
+                session["password_change_error"] = "Nuværende kodeord er forkert."
+                return redirect(settings_url)
+
+            cur.execute(
+                """
+                update users
+                set password_hash = %s
+                where id = %s and player_id = %s;
+                """,
+                (generate_password_hash(new_password), user_id, player_id),
+            )
+            if cur.rowcount == 0:
+                return "Brugerkontoen blev ikke fundet", 404
+        conn.commit()
+
+    session["password_change_success"] = True
+    return redirect(settings_url)
 
 
 @app.post("/player/<int:player_id>/handicap")

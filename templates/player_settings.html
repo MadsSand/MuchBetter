@@ -4,7 +4,11 @@
 
 {% block content %}
 <div class="card">
-    <p class="muted" style="margin: 0 0 8px 0;"><a href="{{ url_for('player_page', player_id=player_id) }}#profil">← Tilbage til profil</a></p>
+    <p class="muted" style="margin: 0 0 8px 0;">
+        <a href="{{ url_for('my_page') }}">← Min side</a>
+        <span class="muted"> · </span>
+        <a href="{{ url_for('player_page', player_id=player_id) }}#profil">Profil</a>
+    </p>
     <h1 style="margin-top: 0;">Profilindstillinger</h1>
     <p class="muted">{{ player_name }}</p>
 </div>
@@ -20,6 +24,34 @@
         <button type="submit">Upload nyt billede</button>
     </form>
 </div>
+
+{% if can_change_password %}
+<div class="card settings-card" id="kodeord">
+    <h2>Kodeord</h2>
+    <p class="muted">Skift kodeordet du bruger til at logge ind på siden.</p>
+    {% if password_success %}
+        <p class="settings-form-success">Dit kodeord er opdateret.</p>
+    {% endif %}
+    {% if password_error %}
+        <p class="settings-form-error">{{ password_error }}</p>
+    {% endif %}
+    <form action="{{ url_for('change_player_password', player_id=player_id) }}" method="post" class="settings-form">
+        <div class="field">
+            <label for="current_password">Nuværende kodeord</label>
+            <input id="current_password" type="password" name="current_password" autocomplete="current-password" required>
+        </div>
+        <div class="field">
+            <label for="new_password">Nyt kodeord</label>
+            <input id="new_password" type="password" name="new_password" autocomplete="new-password" minlength="6" maxlength="128" required>
+        </div>
+        <div class="field">
+            <label for="confirm_password">Gentag nyt kodeord</label>
+            <input id="confirm_password" type="password" name="confirm_password" autocomplete="new-password" minlength="6" maxlength="128" required>
+        </div>
+        <button type="submit">Gem nyt kodeord</button>
+    </form>
+</div>
+{% endif %}
 
 <div class="card settings-card" id="hcp">
     <h2>Sidst kendt HCP</h2>

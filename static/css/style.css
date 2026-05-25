@@ -1198,6 +1198,12 @@ button {
     margin: 0 0 12px 0;
 }
 
+.settings-form-success {
+    color: #86efac;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+}
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);

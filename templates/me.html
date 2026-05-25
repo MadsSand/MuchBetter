@@ -67,7 +67,7 @@
     <div class="me-dashboard__actions">
         <a href="{{ url_for('player_page', player_id=player[0]) }}" class="button-link">Min profil & statistik</a>
         {% if can_edit_player_profile %}
-            <a href="{{ url_for('player_settings', player_id=player[0]) }}" class="secondary-btn">Indstillinger</a>
+            <a href="{{ url_for('player_settings', player_id=player[0]) }}#kodeord" class="secondary-btn">Indstillinger</a>
         {% endif %}
     </div>
 </div>
