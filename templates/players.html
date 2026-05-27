@@ -18,7 +18,13 @@
                     {% endif %}
                     <a class="player-link" href="/player/{{ player[0] }}">{{ player[1] }}</a>
                 </div>
-                <div><a class="player-link muted" href="/player/{{ player[0] }}">Profil</a></div>
+                <div class="players-list-actions">
+                    <a class="player-link muted" href="/player/{{ player[0] }}">Profil</a>
+                    {% if session.logged_in and session.get('player_id') and player[3] and player[3] != session.get('user_id') %}
+                    <span class="muted">·</span>
+                    <a class="player-link muted" href="{{ url_for('messages_start_direct', other_user_id=player[3]) }}">Besked</a>
+                    {% endif %}
+                </div>
             </div>
         {% endfor %}
     </div>

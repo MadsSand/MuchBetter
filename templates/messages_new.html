@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Ny samtale{% endblock %}
+
+{% block content %}
+<p class="messages-back"><a href="{{ url_for('messages_inbox') }}">← Tilbage til beskeder</a></p>
+
+<h1>Ny samtale</h1>
+
+{% if form_error == 'title' %}
+<p class="form-error">Angiv et gruppenavn (max 120 tegn).</p>
+{% elif form_error == 'members' %}
+<p class="form-error">Vælg mindst én anden deltager til gruppen.</p>
+{% endif %}
+
+<div class="card messages-new-section">
+    <h2>Direkte besked</h2>
+    <p class="muted">Kun spillere med koblet login kan modtage beskeder.</p>
+    {% if messaging_users %}
+    <form method="post" action="{{ url_for('messages_create_direct') }}" class="messages-direct-form">
+        <label for="other_user_id">Modtager</label>
+        <select id="other_user_id" name="other_user_id" required>
+            <option value="">Vælg spiller…</option>
+            {% for u in messaging_users %}
+            <option value="{{ u[0] }}">{{ u[2] }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn">Start samtale</button>
+    </form>
+    {% else %}
+    <p class="muted">Ingen andre spillere med koblet bruger endnu.</p>
+    {% endif %}
+</div>
+
+<div class="card messages-new-section">
+    <h2>Opret gruppe</h2>
+    <p class="muted">Alle kan oprette grupper. Vælg deltagere med koblet profil.</p>
+    <form method="post" action="{{ url_for('messages_create_group') }}" class="messages-group-form">
+        <label for="title">Gruppenavn</label>
+        <input type="text" id="title" name="title" maxlength="120" required placeholder="Fx. Weekend-runde">
+
+        <fieldset class="messages-member-picker">
+            <legend>Deltagere</legend>
+            {% if messaging_users %}
+            <div class="messages-member-grid">
+                {% for u in messaging_users %}
+                <label class="messages-member-option">
+                    <input type="checkbox" name="member_ids" value="{{ u[0] }}">
+                    <span>{{ u[2] }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="muted">Ingen andre spillere at tilføje.</p>
+            {% endif %}
+        </fieldset>
+
+        <button type="submit" class="btn" {% if not messaging_users %}disabled{% endif %}>Opret gruppe</button>
+    </form>
+</div>
+{% endblock %}

@@ -33,6 +33,15 @@
                     <span class="topnav-icon">👥</span>
                     <span>Spillere</span>
                 </a>
+                {% if session.logged_in and session.get('player_id') %}
+                <a href="{{ url_for('messages_inbox') }}" class="topnav-messages {% if '/beskeder' in request.path %}active{% endif %}">
+                    <span class="topnav-icon">✉</span>
+                    <span>Beskeder</span>
+                    {% if notif_messages_count > 0 %}
+                    <span class="notif-badge topnav-badge">{{ notif_messages_count }}</span>
+                    {% endif %}
+                </a>
+                {% endif %}
             </nav>
 
             <div class="topbar-actions">

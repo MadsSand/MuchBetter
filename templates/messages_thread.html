@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}{{ display_name }} – Beskeder{% endblock %}
+
+{% block content %}
+<p class="messages-back"><a href="{{ url_for('messages_inbox') }}">← Tilbage til beskeder</a></p>
+
+<div class="messages-thread-header">
+    <h1>{{ display_name }}</h1>
+    {% if kind == 'group' and members %}
+    <p class="muted messages-thread-members">
+        {% for m in members %}{{ m[1] }}{% if not loop.last %}, {% endif %}{% endfor %}
+    </p>
+    {% endif %}
+</div>
+
+<div class="card messages-thread-card">
+    <div class="messages-thread-list">
+        {% if messages %}
+            {% for msg in messages %}
+            {% set is_mine = msg[3] == session.get('user_id') %}
+            <article class="message-bubble {% if is_mine %}message-bubble--mine{% else %}message-bubble--theirs{% endif %}">
+                {% if not is_mine %}
+                <div class="message-bubble-author">
+                    {% if msg[6] and msg[4] %}
+                    <img class="mini-avatar" src="/player/{{ msg[4] }}/avatar" alt="">
+                    {% endif %}
+                    <strong>{{ msg[5] or 'Ukendt' }}</strong>
+                </div>
+                {% endif %}
+                <div class="message-bubble-body">{{ msg[1] }}</div>
+                <time class="message-bubble-time muted">{{ msg[2].strftime('%d/%m/%Y %H:%M') }}</time>
+            </article>
+            {% endfor %}
+        {% else %}
+            <p class="muted messages-thread-empty">Ingen beskeder endnu. Skriv den første nedenfor.</p>
+        {% endif %}
+    </div>
+
+    <form method="post" action="{{ url_for('messages_send', conversation_id=conversation_id) }}" class="messages-compose">
+        <label class="sr-only" for="body">Besked</label>
+        <textarea id="body" name="body" rows="3" maxlength="4000" required placeholder="Skriv en besked…"></textarea>
+        <button type="submit" class="btn">Send</button>
+    </form>
+</div>
+{% endblock %}

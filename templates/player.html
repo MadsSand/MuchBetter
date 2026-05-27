@@ -36,6 +36,10 @@
                 <span class="muted">·</span>
                 <a href="{{ url_for('player_settings', player_id=player[0]) }}#hcp">Opdater HCP</a>
             </p>
+        {% elif message_user_id %}
+            <p class="profile-edit-links">
+                <a href="{{ url_for('messages_start_direct', other_user_id=message_user_id) }}">Send besked</a>
+            </p>
         {% endif %}
     </div>
 </div>

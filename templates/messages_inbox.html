@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Beskeder{% endblock %}
+
+{% block content %}
+<div class="messages-header">
+    <h1>Beskeder</h1>
+    <a class="btn" href="{{ url_for('messages_new') }}">Ny samtale</a>
+</div>
+
+<div class="card">
+    {% if inbox %}
+    <div class="messages-inbox-list">
+        {% for row in inbox %}
+        <a class="messages-inbox-row {% if row[5] > 0 %}messages-inbox-row--unread{% endif %}" href="{{ url_for('messages_thread', conversation_id=row[0]) }}">
+            <div class="messages-inbox-main">
+                <strong>{{ row[6] }}</strong>
+                {% if row[4] %}
+                <div class="messages-inbox-preview muted">{{ row[4][:120] }}{% if row[4]|length > 120 %}…{% endif %}</div>
+                {% else %}
+                <div class="messages-inbox-preview muted">Ingen beskeder endnu</div>
+                {% endif %}
+            </div>
+            <div class="messages-inbox-meta">
+                {% if row[3] %}
+                <span class="muted messages-inbox-time">{{ row[3].strftime('%d/%m %H:%M') }}</span>
+                {% endif %}
+                {% if row[5] > 0 %}
+                <span class="notif-badge">{{ row[5] }}</span>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">Du har ingen samtaler endnu. Start en direkte besked eller opret en gruppe.</p>
+    {% endif %}
+</div>
+{% endblock %}

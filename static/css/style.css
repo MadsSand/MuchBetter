@@ -1790,6 +1790,232 @@ input[type="text"] {
     text-align: center;
 }
 
+.topnav-messages {
+    position: relative;
+}
+
+.topnav .notif-badge.topnav-badge {
+    margin-left: 6px;
+    min-width: 18px;
+    height: 18px;
+    line-height: 18px;
+    font-size: 11px;
+    padding: 0 5px;
+}
+
+.messages-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.messages-header h1 {
+    margin: 0;
+}
+
+.messages-back {
+    margin: 0 0 12px;
+}
+
+.messages-inbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.messages-inbox-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    text-decoration: none;
+    color: inherit;
+}
+
+.messages-inbox-row:last-child {
+    border-bottom: none;
+}
+
+.messages-inbox-row:hover {
+    background: var(--surface-2);
+    margin: 0 -12px;
+    padding-left: 12px;
+    padding-right: 12px;
+    border-radius: 8px;
+}
+
+.messages-inbox-row--unread strong {
+    font-weight: 800;
+}
+
+.messages-inbox-main {
+    min-width: 0;
+    flex: 1;
+}
+
+.messages-inbox-preview {
+    margin-top: 4px;
+    font-size: 14px;
+}
+
+.messages-inbox-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.messages-inbox-time {
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.messages-new-section {
+    margin-bottom: 16px;
+}
+
+.messages-new-section h2 {
+    margin-top: 0;
+}
+
+.messages-direct-form,
+.messages-group-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.messages-direct-form select,
+.messages-group-form input[type="text"] {
+    max-width: 420px;
+}
+
+.messages-member-picker {
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
+.messages-member-picker legend {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.messages-member-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+}
+
+.messages-member-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.messages-thread-header h1 {
+    margin-bottom: 4px;
+}
+
+.messages-thread-members {
+    margin: 0 0 16px;
+    font-size: 14px;
+}
+
+.messages-thread-card {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.messages-thread-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: min(60vh, 520px);
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.messages-thread-empty {
+    margin: 0;
+}
+
+.message-bubble {
+    max-width: min(85%, 520px);
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: var(--surface-2);
+}
+
+.message-bubble--mine {
+    align-self: flex-end;
+    background: var(--nav-active-bg);
+    color: var(--nav-active-text);
+}
+
+.message-bubble--mine .message-bubble-time {
+    color: inherit;
+    opacity: 0.75;
+}
+
+.message-bubble--theirs {
+    align-self: flex-start;
+}
+
+.message-bubble-author {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.message-bubble-body {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.message-bubble-time {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+}
+
+.messages-compose {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+}
+
+.messages-compose textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 72px;
+}
+
+.players-list-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.form-error {
+    color: #b91c1c;
+    margin: 0 0 12px;
+}
+
 .sidebar-link:hover {
     background: var(--surface-2);
     color: var(--text);

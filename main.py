@@ -211,6 +211,241 @@ def ensure_forum_enhancements():
 ensure_forum_enhancements()
 
 
+def ensure_messaging_tables():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                create table if not exists conversations (
+                    id serial primary key,
+                    kind text not null check (kind in ('direct', 'group')),
+                    title text,
+                    created_by_user_id integer references users(id) on delete set null,
+                    created_at timestamptz not null default now()
+                );
+                """
+            )
+            cur.execute(
+                """
+                create table if not exists conversation_members (
+                    conversation_id integer not null references conversations(id) on delete cascade,
+                    user_id integer not null references users(id) on delete cascade,
+                    joined_at timestamptz not null default now(),
+                    last_read_at timestamptz not null default now(),
+                    primary key (conversation_id, user_id)
+                );
+                """
+            )
+            cur.execute(
+                """
+                create table if not exists messages (
+                    id serial primary key,
+                    conversation_id integer not null references conversations(id) on delete cascade,
+                    sender_user_id integer not null references users(id) on delete cascade,
+                    body text not null,
+                    created_at timestamptz not null default now()
+                );
+                """
+            )
+            cur.execute(
+                """
+                create index if not exists messages_conversation_created_idx
+                on messages (conversation_id, created_at desc);
+                """
+            )
+        conn.commit()
+
+
+ensure_messaging_tables()
+
+
+MESSAGING_USER_SQL = """
+    select u.id, p.id, p.full_name, (p.avatar_data is not null) as has_avatar
+    from users u
+    join players p on p.id = u.player_id
+    where u.is_approved = true
+      and p.is_active = true
+"""
+
+
+def fetch_messaging_user_ids(cur):
+    cur.execute(
+        f"""
+        select u.id
+        from users u
+        join players p on p.id = u.player_id
+        where u.is_approved = true
+          and p.is_active = true;
+        """
+    )
+    return {int(row[0]) for row in cur.fetchall()}
+
+
+def is_messaging_user(cur, user_id):
+    if not user_id:
+        return False
+    cur.execute(
+        """
+        select 1
+        from users u
+        join players p on p.id = u.player_id
+        where u.id = %s
+          and u.is_approved = true
+          and p.is_active = true;
+        """,
+        (user_id,),
+    )
+    return cur.fetchone() is not None
+
+
+def find_direct_conversation_id(cur, user_a, user_b):
+    cur.execute(
+        """
+        select c.id
+        from conversations c
+        where c.kind = 'direct'
+          and (
+            select count(*) from conversation_members cm
+            where cm.conversation_id = c.id
+          ) = 2
+          and exists (
+            select 1 from conversation_members cm
+            where cm.conversation_id = c.id and cm.user_id = %s
+          )
+          and exists (
+            select 1 from conversation_members cm
+            where cm.conversation_id = c.id and cm.user_id = %s
+          )
+        limit 1;
+        """,
+        (user_a, user_b),
+    )
+    row = cur.fetchone()
+    return int(row[0]) if row else None
+
+
+def get_or_create_direct_conversation(cur, user_id, other_user_id):
+    existing = find_direct_conversation_id(cur, user_id, other_user_id)
+    if existing:
+        return existing
+    cur.execute(
+        """
+        insert into conversations (kind, created_by_user_id)
+        values ('direct', %s)
+        returning id;
+        """,
+        (user_id,),
+    )
+    conversation_id = int(cur.fetchone()[0])
+    for member_id in (user_id, other_user_id):
+        cur.execute(
+            """
+            insert into conversation_members (conversation_id, user_id)
+            values (%s, %s);
+            """,
+            (conversation_id, member_id),
+        )
+    return conversation_id
+
+
+def user_in_conversation(cur, user_id, conversation_id):
+    cur.execute(
+        """
+        select 1
+        from conversation_members
+        where conversation_id = %s and user_id = %s;
+        """,
+        (conversation_id, user_id),
+    )
+    return cur.fetchone() is not None
+
+
+def mark_conversation_read(cur, user_id, conversation_id):
+    cur.execute(
+        """
+        update conversation_members
+        set last_read_at = now()
+        where conversation_id = %s and user_id = %s;
+        """,
+        (conversation_id, user_id),
+    )
+
+
+def count_unread_messages(cur, user_id):
+    cur.execute(
+        """
+        select coalesce(sum(sub.unread), 0)
+        from (
+            select count(*)::int as unread
+            from conversation_members cm
+            join messages m on m.conversation_id = cm.conversation_id
+            where cm.user_id = %s
+              and m.created_at > cm.last_read_at
+              and m.sender_user_id <> %s
+            group by cm.conversation_id
+        ) sub;
+        """,
+        (user_id, user_id),
+    )
+    return int(cur.fetchone()[0] or 0)
+
+
+def fetch_inbox_rows(cur, user_id):
+    cur.execute(
+        """
+        select
+            c.id,
+            c.kind,
+            c.title,
+            (
+                select max(m.created_at)
+                from messages m
+                where m.conversation_id = c.id
+            ) as last_at,
+            (
+                select m.body
+                from messages m
+                where m.conversation_id = c.id
+                order by m.created_at desc, m.id desc
+                limit 1
+            ) as last_body,
+            (
+                select count(*)::int
+                from messages m
+                where m.conversation_id = c.id
+                  and m.created_at > cm.last_read_at
+                  and m.sender_user_id <> %s
+            ) as unread_count,
+            case
+                when c.kind = 'direct' then (
+                    select p.full_name
+                    from conversation_members cm2
+                    join users u on u.id = cm2.user_id
+                    join players p on p.id = u.player_id
+                    where cm2.conversation_id = c.id
+                      and cm2.user_id <> %s
+                    limit 1
+                )
+                else coalesce(c.title, 'Gruppe')
+            end as display_name
+        from conversations c
+        join conversation_members cm on cm.conversation_id = c.id and cm.user_id = %s
+        order by
+            coalesce(
+                (
+                    select max(m.created_at)
+                    from messages m
+                    where m.conversation_id = c.id
+                ),
+                c.created_at
+            ) desc,
+            c.id desc;
+        """,
+        (user_id, user_id, user_id),
+    )
+    return cur.fetchall()
+
+
 def fetch_sidebar_updates(cur, limit=8):
     cur.execute(
         """
@@ -650,6 +885,7 @@ def inject_layout_context():
         "notif_rounds_count": 0,
         "notif_leaderboard_count": 0,
         "notif_events_count": 0,
+        "notif_messages_count": 0,
     }
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
@@ -708,6 +944,7 @@ def inject_layout_context():
                         (int(events_seen_id or 0),),
                     )
                     ctx["notif_events_count"] = int(cur.fetchone()[0] or 0)
+                    ctx["notif_messages_count"] = count_unread_messages(cur, user_id)
             if session.get("is_admin"):
                 cur.execute("""
                     select id, username, created_at
@@ -732,6 +969,20 @@ def login_required(view_func):
         if not session.get("logged_in"):
             return redirect(url_for("login", next=request.path))
         return view_func(*args, **kwargs)
+    return wrapped_view
+
+
+def messaging_required(view_func):
+    @wraps(view_func)
+    @login_required
+    def wrapped_view(*args, **kwargs):
+        if not session.get("player_id"):
+            return (
+                "Din bruger er ikke koblet til en spiller. Kontakt en admin for at bruge beskeder.",
+                403,
+            )
+        return view_func(*args, **kwargs)
+
     return wrapped_view
 
 
@@ -2192,12 +2443,14 @@ def players():
             cur.execute(
                 """
                 select
-                    id,
-                    full_name,
-                    avatar_data is not null as has_avatar
-                from players
-                where is_active = true
-                order by full_name;
+                    p.id,
+                    p.full_name,
+                    p.avatar_data is not null as has_avatar,
+                    u.id as linked_user_id
+                from players p
+                left join users u on u.player_id = p.id and u.is_approved = true
+                where p.is_active = true
+                order by p.full_name;
                 """
             )
             player_rows = cur.fetchall()
@@ -2216,13 +2469,32 @@ def player_page(player_id):
             if not bundle:
                 return "Spilleren blev ikke fundet", 404
             player = bundle["player"]
+            cur.execute(
+                """
+                select id
+                from users
+                where player_id = %s and is_approved = true
+                limit 1;
+                """,
+                (player_id,),
+            )
+            linked_user = cur.fetchone()
 
     is_own_profile = session.get("player_id") == player_id
+    message_user_id = None
+    if (
+        linked_user
+        and session.get("player_id")
+        and session.get("user_id")
+        and int(linked_user[0]) != int(session["user_id"])
+    ):
+        message_user_id = int(linked_user[0])
 
     return render_template(
         "player.html",
         player=player,
         is_own_profile=is_own_profile,
+        message_user_id=message_user_id,
         can_edit_player_profile=can_edit_player(player_id),
         handicap_display=format_handicap_dk(player[10]),
         last_5_rounds=bundle["last_5_rounds"],
@@ -2737,6 +3009,234 @@ def toggle_forum_post_like(post_id):
         conn.commit()
 
     return redirect(url_for("forum_thread", thread_id=thread_id))
+
+
+@app.get("/beskeder")
+@messaging_required
+def messages_inbox():
+    user_id = session["user_id"]
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            inbox = fetch_inbox_rows(cur, user_id)
+    return render_template("messages_inbox.html", inbox=inbox)
+
+
+@app.get("/beskeder/ny")
+@messaging_required
+def messages_new():
+    user_id = session["user_id"]
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                MESSAGING_USER_SQL
+                + """
+                and u.id <> %s
+                order by p.full_name;
+                """,
+                (user_id,),
+            )
+            messaging_users = cur.fetchall()
+    return render_template(
+        "messages_new.html",
+        messaging_users=messaging_users,
+        form_error=request.args.get("error"),
+    )
+
+
+@app.post("/beskeder/direct")
+@messaging_required
+def messages_create_direct():
+    user_id = session["user_id"]
+    other_user_id = request.form.get("other_user_id", type=int)
+    if not other_user_id or other_user_id == user_id:
+        return redirect(url_for("messages_new"))
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            if not is_messaging_user(cur, other_user_id):
+                return "Du kan kun skrive til brugere med koblet spillerprofil", 400
+            conversation_id = get_or_create_direct_conversation(cur, user_id, other_user_id)
+        conn.commit()
+
+    return redirect(url_for("messages_thread", conversation_id=conversation_id))
+
+
+@app.get("/beskeder/med/<int:other_user_id>")
+@messaging_required
+def messages_start_direct(other_user_id):
+    user_id = session["user_id"]
+    if other_user_id == user_id:
+        return redirect(url_for("messages_inbox"))
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            if not is_messaging_user(cur, other_user_id):
+                return "Du kan kun skrive til brugere med koblet spillerprofil", 400
+            conversation_id = get_or_create_direct_conversation(cur, user_id, other_user_id)
+        conn.commit()
+
+    return redirect(url_for("messages_thread", conversation_id=conversation_id))
+
+
+@app.post("/beskeder/gruppe")
+@messaging_required
+def messages_create_group():
+    user_id = session["user_id"]
+    title = (request.form.get("title") or "").strip()
+    member_ids = {
+        int(mid)
+        for mid in request.form.getlist("member_ids")
+        if str(mid).isdigit()
+    }
+    member_ids.discard(user_id)
+
+    if not title or len(title) > 120:
+        return redirect(url_for("messages_new", error="title"))
+    if not member_ids:
+        return redirect(url_for("messages_new", error="members"))
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            allowed = fetch_messaging_user_ids(cur)
+            if not member_ids.issubset(allowed):
+                return "Alle medlemmer skal have en koblet spillerprofil", 400
+
+            cur.execute(
+                """
+                insert into conversations (kind, title, created_by_user_id)
+                values ('group', %s, %s)
+                returning id;
+                """,
+                (title, user_id),
+            )
+            conversation_id = int(cur.fetchone()[0])
+            all_members = {user_id} | member_ids
+            for member_id in all_members:
+                cur.execute(
+                    """
+                    insert into conversation_members (conversation_id, user_id)
+                    values (%s, %s);
+                    """,
+                    (conversation_id, member_id),
+                )
+        conn.commit()
+
+    return redirect(url_for("messages_thread", conversation_id=conversation_id))
+
+
+@app.get("/beskeder/<int:conversation_id>")
+@messaging_required
+def messages_thread(conversation_id):
+    user_id = session["user_id"]
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            if not user_in_conversation(cur, user_id, conversation_id):
+                return "Samtalen blev ikke fundet", 404
+
+            cur.execute(
+                """
+                select kind, title
+                from conversations
+                where id = %s;
+                """,
+                (conversation_id,),
+            )
+            conv = cur.fetchone()
+            if not conv:
+                return "Samtalen blev ikke fundet", 404
+            kind, title = conv
+
+            if kind == "direct":
+                cur.execute(
+                    """
+                    select p.full_name
+                    from conversation_members cm
+                    join users u on u.id = cm.user_id
+                    join players p on p.id = u.player_id
+                    where cm.conversation_id = %s
+                      and cm.user_id <> %s
+                    limit 1;
+                    """,
+                    (conversation_id, user_id),
+                )
+                row = cur.fetchone()
+                display_name = row[0] if row else "Samtale"
+            else:
+                display_name = title or "Gruppe"
+
+            cur.execute(
+                """
+                select
+                    m.id,
+                    m.body,
+                    m.created_at,
+                    m.sender_user_id,
+                    p.id,
+                    p.full_name,
+                    (p.avatar_data is not null) as has_avatar
+                from messages m
+                join users u on u.id = m.sender_user_id
+                left join players p on p.id = u.player_id
+                where m.conversation_id = %s
+                order by m.created_at asc, m.id asc;
+                """,
+                (conversation_id,),
+            )
+            messages = cur.fetchall()
+
+            cur.execute(
+                """
+                select
+                    cm.user_id,
+                    p.full_name,
+                    (p.avatar_data is not null) as has_avatar,
+                    p.id as player_id
+                from conversation_members cm
+                join users u on u.id = cm.user_id
+                join players p on p.id = u.player_id
+                where cm.conversation_id = %s
+                order by p.full_name;
+                """,
+                (conversation_id,),
+            )
+            members = cur.fetchall()
+
+            mark_conversation_read(cur, user_id, conversation_id)
+        conn.commit()
+
+    return render_template(
+        "messages_thread.html",
+        conversation_id=conversation_id,
+        display_name=display_name,
+        kind=kind,
+        messages=messages,
+        members=members,
+    )
+
+
+@app.post("/beskeder/<int:conversation_id>/send")
+@messaging_required
+def messages_send(conversation_id):
+    user_id = session["user_id"]
+    body = (request.form.get("body") or "").strip()
+    if not body or len(body) > 4000:
+        return redirect(url_for("messages_thread", conversation_id=conversation_id))
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            if not user_in_conversation(cur, user_id, conversation_id):
+                return "Samtalen blev ikke fundet", 404
+            cur.execute(
+                """
+                insert into messages (conversation_id, sender_user_id, body)
+                values (%s, %s, %s);
+                """,
+                (conversation_id, user_id, body),
+            )
+            mark_conversation_read(cur, user_id, conversation_id)
+        conn.commit()
+
+    return redirect(url_for("messages_thread", conversation_id=conversation_id))
 
 
 @app.route("/register", methods=["GET", "POST"])
