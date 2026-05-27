@@ -3,10 +3,24 @@
 {% block title %}{{ thread[1] }}{% endblock %}
 
 {% block content %}
-<h1>{{ thread[1] }}</h1>
+<h1>
+    {{ thread[1] }}
+    {% if thread[3] %}
+    <span class="thread-badge">Sticky</span>
+    {% endif %}
+</h1>
 
 <div class="card">
-    <a href="/forum" class="button-link">Tilbage til forum</a>
+    <div class="forum-thread-head">
+        <a href="/forum" class="button-link">Tilbage til forum</a>
+        {% if session.get('is_admin') %}
+        <form method="post" action="/forum/{{ thread[0] }}/sticky" style="margin: 0;">
+            <button type="submit" class="secondary-btn">
+                {% if thread[3] %}Fjern sticky{% else %}Gør sticky{% endif %}
+            </button>
+        </form>
+        {% endif %}
+    </div>
 </div>
 
 {% for p in posts %}
@@ -22,14 +36,44 @@
             </div>
             <span class="muted">{{ p[3] }}</span>
         </div>
+        {% if p[6] %}
+        <div class="forum-quote">
+            <strong>{{ p[7] if p[7] else "Svar" }}:</strong>
+            <span>{{ p[8] }}</span>
+        </div>
+        {% endif %}
         <div class="forum-post-body">{{ p[2] }}</div>
+        <div class="forum-post-actions">
+            <form method="post" action="/forum/post/{{ p[0] }}/like">
+                <button type="submit" class="secondary-btn forum-like-btn{% if p[10] %} forum-like-btn--active{% endif %}">
+                    {% if p[10] %}❤️{% else %}🤍{% endif %} Like ({{ p[9] }})
+                </button>
+            </form>
+            <button
+                type="button"
+                class="secondary-btn forum-reply-btn"
+                data-reply-post-id="{{ p[0] }}"
+                data-reply-author="{{ p[1] }}"
+                data-reply-snippet="{{ p[2]|replace('\n', ' ')|truncate(90, True, '…') }}"
+            >
+                Svar / quote
+            </button>
+        </div>
     </div>
 {% endfor %}
 
 <div class="card">
     <h2>Svar</h2>
+    <div id="reply-preview" class="forum-reply-preview" style="display: none;">
+        <div class="forum-quote">
+            <strong id="reply-preview-author"></strong>
+            <span id="reply-preview-text"></span>
+        </div>
+        <button type="button" class="secondary-btn" id="reply-clear-btn" style="margin-top: 8px;">Fjern quote</button>
+    </div>
 
     <form method="post" action="/forum/{{ thread[0] }}/reply">
+        <input type="hidden" id="reply_to_post_id" name="reply_to_post_id" value="">
         <div class="field">
             <label for="body">Svar</label>
             <textarea id="body" name="body" rows="5" required></textarea>
@@ -38,4 +82,33 @@
         <button type="submit">Send svar</button>
     </form>
 </div>
+<script>
+    (function () {
+        const hiddenInput = document.getElementById("reply_to_post_id");
+        const preview = document.getElementById("reply-preview");
+        const previewAuthor = document.getElementById("reply-preview-author");
+        const previewText = document.getElementById("reply-preview-text");
+        const clearBtn = document.getElementById("reply-clear-btn");
+        const textarea = document.getElementById("body");
+
+        document.querySelectorAll(".forum-reply-btn").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                hiddenInput.value = btn.dataset.replyPostId || "";
+                previewAuthor.textContent = (btn.dataset.replyAuthor || "Svar") + ":";
+                previewText.textContent = btn.dataset.replySnippet || "";
+                preview.style.display = "block";
+                textarea.focus();
+            });
+        });
+
+        if (clearBtn) {
+            clearBtn.addEventListener("click", function () {
+                hiddenInput.value = "";
+                preview.style.display = "none";
+                previewAuthor.textContent = "";
+                previewText.textContent = "";
+            });
+        }
+    })();
+</script>
 {% endblock %}

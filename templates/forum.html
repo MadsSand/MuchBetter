@@ -7,13 +7,33 @@
     <h1>Forum</h1>
     <a href="/forum/new" class="button-link">Ny tråd</a>
 </div>
+{% if unread_threads_count > 0 %}
+<p class="muted" style="margin: 0 0 12px 0;">{{ unread_threads_count }} tråd(e) med ulæste svar.</p>
+{% endif %}
 
 {% if threads %}
     {% for t in threads %}
-        <div class="card">
-            <a href="/forum/{{ t[0] }}" class="thread-title">{{ t[1] }}</a>
+        <div class="card forum-thread-card{% if t.has_unread %} forum-thread-card--unread{% endif %}">
+            <div class="forum-thread-head">
+                <a href="/forum/{{ t.id }}" class="thread-title">
+                    {{ t.title }}
+                    {% if t.is_sticky %}
+                    <span class="thread-badge">Sticky</span>
+                    {% endif %}
+                    {% if t.has_unread %}
+                    <span class="thread-badge thread-badge--new">Ny</span>
+                    {% endif %}
+                </a>
+                {% if session.get('is_admin') %}
+                <form method="post" action="/forum/{{ t.id }}/sticky" style="margin: 0;">
+                    <button type="submit" class="secondary-btn" style="padding: 6px 10px; font-size: 12px;">
+                        {% if t.is_sticky %}Fjern sticky{% else %}Gør sticky{% endif %}
+                    </button>
+                </form>
+                {% endif %}
+            </div>
             <p class="muted">
-                {{ t[3] }} indlæg · Seneste aktivitet: {{ t[4] if t[4] else t[2] }}
+                {{ t.post_count }} indlæg · Seneste aktivitet: {{ t.latest_post if t.latest_post else t.created_at }}
             </p>
         </div>
     {% endfor %}

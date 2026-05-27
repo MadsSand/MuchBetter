@@ -149,6 +149,68 @@ def ensure_sidebar_updates_table():
 ensure_sidebar_updates_table()
 
 
+def ensure_user_notifications_table():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                create table if not exists user_notifications (
+                    user_id integer primary key references users(id) on delete cascade,
+                    forum_seen_at timestamptz not null default now(),
+                    rounds_seen_round_id integer not null default 0,
+                    leaderboard_seen_round_id integer not null default 0,
+                    events_seen_event_id integer not null default 0,
+                    updated_at timestamptz not null default now()
+                );
+                """
+            )
+        conn.commit()
+
+
+ensure_user_notifications_table()
+
+
+def ensure_forum_enhancements():
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                alter table forum_threads
+                add column if not exists is_sticky boolean not null default false;
+                """
+            )
+            cur.execute(
+                """
+                alter table forum_posts
+                add column if not exists parent_post_id integer references forum_posts(id) on delete set null;
+                """
+            )
+            cur.execute(
+                """
+                create table if not exists forum_post_likes (
+                    post_id integer not null references forum_posts(id) on delete cascade,
+                    user_id integer not null references users(id) on delete cascade,
+                    created_at timestamptz not null default now(),
+                    primary key (post_id, user_id)
+                );
+                """
+            )
+            cur.execute(
+                """
+                create table if not exists forum_thread_reads (
+                    user_id integer not null references users(id) on delete cascade,
+                    thread_id integer not null references forum_threads(id) on delete cascade,
+                    last_seen_post_at timestamptz not null default now(),
+                    primary key (user_id, thread_id)
+                );
+                """
+            )
+        conn.commit()
+
+
+ensure_forum_enhancements()
+
+
 def fetch_sidebar_updates(cur, limit=8):
     cur.execute(
         """
@@ -160,6 +222,110 @@ def fetch_sidebar_updates(cur, limit=8):
         (limit,),
     )
     return cur.fetchall()
+
+
+def ensure_notification_row(cur, user_id):
+    cur.execute(
+        """
+        insert into user_notifications (user_id)
+        values (%s)
+        on conflict (user_id) do nothing;
+        """,
+        (user_id,),
+    )
+
+
+def fetch_latest_markers(cur):
+    cur.execute("select coalesce(max(id), 0) from rounds;")
+    latest_round_id = int(cur.fetchone()[0] or 0)
+
+    cur.execute("select coalesce(max(id), 0) from upcoming_events;")
+    latest_event_id = int(cur.fetchone()[0] or 0)
+
+    cur.execute(
+        """
+        select coalesce(max(created_at), to_timestamp(0))
+        from forum_posts;
+        """
+    )
+    latest_forum_post_at = cur.fetchone()[0]
+
+    return {
+        "latest_round_id": latest_round_id,
+        "latest_event_id": latest_event_id,
+        "latest_forum_post_at": latest_forum_post_at,
+    }
+
+
+def mark_notification_seen(user_id, section):
+    if not user_id:
+        return
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            ensure_notification_row(cur, user_id)
+            latest = fetch_latest_markers(cur)
+            if section == "forum":
+                cur.execute(
+                    """
+                    update user_notifications
+                    set forum_seen_at = now(),
+                        updated_at = now()
+                    where user_id = %s;
+                    """,
+                    (user_id,),
+                )
+            elif section == "rounds":
+                cur.execute(
+                    """
+                    update user_notifications
+                    set rounds_seen_round_id = %s,
+                        updated_at = now()
+                    where user_id = %s;
+                    """,
+                    (latest["latest_round_id"], user_id),
+                )
+            elif section == "leaderboard":
+                cur.execute(
+                    """
+                    update user_notifications
+                    set leaderboard_seen_round_id = %s,
+                        updated_at = now()
+                    where user_id = %s;
+                    """,
+                    (latest["latest_round_id"], user_id),
+                )
+            elif section == "events":
+                cur.execute(
+                    """
+                    update user_notifications
+                    set events_seen_event_id = %s,
+                        updated_at = now()
+                    where user_id = %s;
+                    """,
+                    (latest["latest_event_id"], user_id),
+                )
+        conn.commit()
+
+
+def mark_forum_thread_seen(cur, user_id, thread_id):
+    cur.execute(
+        """
+        select coalesce(max(created_at), now())
+        from forum_posts
+        where thread_id = %s;
+        """,
+        (thread_id,),
+    )
+    latest_post_at = cur.fetchone()[0]
+    cur.execute(
+        """
+        insert into forum_thread_reads (user_id, thread_id, last_seen_post_at)
+        values (%s, %s, %s)
+        on conflict (user_id, thread_id)
+        do update set last_seen_post_at = excluded.last_seen_post_at;
+        """,
+        (user_id, thread_id, latest_post_at),
+    )
 
 
 def ensure_course_hero_assets():
@@ -480,10 +646,68 @@ def inject_layout_context():
         "admin_pending_users": [],
         "admin_players": [],
         "sidebar_updates": [],
+        "notif_forum_count": 0,
+        "notif_rounds_count": 0,
+        "notif_leaderboard_count": 0,
+        "notif_events_count": 0,
     }
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
             ctx["sidebar_updates"] = fetch_sidebar_updates(cur)
+            user_id = session.get("user_id")
+            if user_id:
+                ensure_notification_row(cur, user_id)
+                latest = fetch_latest_markers(cur)
+                cur.execute(
+                    """
+                    select
+                        forum_seen_at,
+                        rounds_seen_round_id,
+                        leaderboard_seen_round_id,
+                        events_seen_event_id
+                    from user_notifications
+                    where user_id = %s;
+                    """,
+                    (user_id,),
+                )
+                seen = cur.fetchone()
+                if seen:
+                    forum_seen_at, rounds_seen_id, leaderboard_seen_id, events_seen_id = seen
+
+                    cur.execute(
+                        """
+                        select count(*)
+                        from forum_posts fp
+                        where fp.created_at > %s
+                          and (%s is null or fp.user_id <> %s);
+                        """,
+                        (forum_seen_at, user_id, user_id),
+                    )
+                    ctx["notif_forum_count"] = int(cur.fetchone()[0] or 0)
+
+                    cur.execute(
+                        """
+                        select count(*)
+                        from rounds
+                        where id > %s;
+                        """,
+                        (int(rounds_seen_id or 0),),
+                    )
+                    ctx["notif_rounds_count"] = int(cur.fetchone()[0] or 0)
+
+                    ctx["notif_leaderboard_count"] = (
+                        1 if latest["latest_round_id"] > int(leaderboard_seen_id or 0) else 0
+                    )
+
+                    cur.execute(
+                        """
+                        select count(*)
+                        from upcoming_events
+                        where id > %s;
+                        """,
+                        (int(events_seen_id or 0),),
+                    )
+                    ctx["notif_events_count"] = int(cur.fetchone()[0] or 0)
             if session.get("is_admin"):
                 cur.execute("""
                     select id, username, created_at
@@ -523,6 +747,14 @@ def can_change_own_password(player_id: int) -> bool:
         and session.get("user_id")
         and session.get("player_id") == player_id
     )
+
+
+def comparable_dt(value):
+    if value is None:
+        return None
+    if getattr(value, "tzinfo", None) is None:
+        return value
+    return value.astimezone().replace(tzinfo=None)
 
 
 def _highlight_names_with_score(rows, score_label="stableford"):
@@ -1396,6 +1628,8 @@ def list_rounds():
             """)
             rounds = cur.fetchall()
 
+    if session.get("user_id"):
+        mark_notification_seen(session.get("user_id"), "rounds")
     return render_template("rounds.html", rounds=rounds)
 
 @app.get("/round/<int:round_id>")
@@ -1471,6 +1705,8 @@ def show_round(round_id):
             season_rows = cur.fetchall()
 
 
+    if session.get("user_id"):
+        mark_notification_seen(session.get("user_id"), "rounds")
     return render_template(
         "round_detail.html",
         round_id=round_id,
@@ -1930,6 +2166,8 @@ def stats():
             course_stats = fetch_course_stats(cur, selected_year)
             leaderboard_progress = fetch_leaderboard_progress(cur, selected_year)
 
+    if session.get("user_id"):
+        mark_notification_seen(session.get("user_id"), "leaderboard")
     return render_template(
         "stats.html",
         player_stats=player_stats,
@@ -2214,23 +2452,56 @@ def update_player_handicap(player_id):
 @app.get("/forum")
 @login_required
 def forum():
+    user_id = session.get("user_id")
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 select
                     t.id,
                     t.title,
+                    t.is_sticky,
                     t.created_at,
                     count(p.id) as post_count,
-                    max(p.created_at) as latest_post
+                    max(p.created_at) as latest_post,
+                    coalesce(ftr.last_seen_post_at, to_timestamp(0)) as last_seen_post_at
                 from forum_threads t
                 left join forum_posts p on p.thread_id = t.id
+                left join forum_thread_reads ftr
+                    on ftr.thread_id = t.id
+                    and ftr.user_id = %s
                 group by t.id, t.title, t.created_at
-                order by coalesce(max(p.created_at), t.created_at) desc;
-            """)
+                       , t.is_sticky, ftr.last_seen_post_at
+                order by t.is_sticky desc, coalesce(max(p.created_at), t.created_at) desc;
+            """, (user_id,))
             threads = cur.fetchall()
 
-    return render_template("forum.html", threads=threads)
+    mark_notification_seen(session.get("user_id"), "forum")
+    unread_threads_count = 0
+    prepared_threads = []
+    for t in threads:
+        thread_id, title, is_sticky, created_at, post_count, latest_post, last_seen_post_at = t
+        last_activity = comparable_dt(latest_post or created_at)
+        seen_at = comparable_dt(last_seen_post_at)
+        has_unread = bool(last_activity and seen_at and last_activity > seen_at)
+        if has_unread:
+            unread_threads_count += 1
+        prepared_threads.append(
+            {
+                "id": thread_id,
+                "title": title,
+                "is_sticky": bool(is_sticky),
+                "created_at": created_at,
+                "post_count": int(post_count or 0),
+                "latest_post": latest_post,
+                "has_unread": has_unread,
+            }
+        )
+
+    return render_template(
+        "forum.html",
+        threads=prepared_threads,
+        unread_threads_count=unread_threads_count,
+    )
 
 
 @app.get("/forum/new")
@@ -2275,6 +2546,7 @@ def create_forum_thread():
                 insert into forum_posts (thread_id, user_id, author_name, body)
                 values (%s, %s, %s, %s);
             """, (thread_id, user_id, author_name, body))
+            mark_forum_thread_seen(cur, user_id, thread_id)
 
         conn.commit()
 
@@ -2284,10 +2556,11 @@ def create_forum_thread():
 @app.get("/forum/<int:thread_id>")
 @login_required
 def forum_thread(thread_id):
+    user_id = session.get("user_id")
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                select id, title, created_at
+                select id, title, created_at, is_sticky
                 from forum_threads
                 where id = %s;
             """, (thread_id,))
@@ -2303,15 +2576,35 @@ def forum_thread(thread_id):
                     fp.body,
                     fp.created_at,
                     u.player_id,
-                    coalesce(p.avatar_data is not null, false) as has_avatar
+                    coalesce(p.avatar_data is not null, false) as has_avatar,
+                    fp.parent_post_id,
+                    pp.author_name as parent_author_name,
+                    pp.body as parent_body,
+                    count(fpl.user_id)::int as like_count,
+                    bool_or(fpl.user_id = %s) as liked_by_me
                 from forum_posts fp
                 left join users u on u.id = fp.user_id
                 left join players p on p.id = u.player_id
+                left join forum_posts pp on pp.id = fp.parent_post_id
+                left join forum_post_likes fpl on fpl.post_id = fp.id
                 where fp.thread_id = %s
+                group by
+                    fp.id,
+                    fp.author_name,
+                    fp.body,
+                    fp.created_at,
+                    u.player_id,
+                    p.avatar_data,
+                    fp.parent_post_id,
+                    pp.author_name,
+                    pp.body
                 order by fp.created_at asc;
-            """, (thread_id,))
+            """, (user_id, thread_id))
             posts = cur.fetchall()
+            mark_forum_thread_seen(cur, user_id, thread_id)
+        conn.commit()
 
+    mark_notification_seen(session.get("user_id"), "forum")
     return render_template("forum_thread.html", thread=thread, posts=posts)
 
 
@@ -2335,20 +2628,116 @@ def reply_forum_thread(thread_id):
     author_name = user[0]
 
     body = request.form.get("body", "").strip()
+    reply_to_raw = (request.form.get("reply_to_post_id") or "").strip()
+    parent_post_id = None
+    if reply_to_raw:
+        try:
+            parent_post_id = int(reply_to_raw)
+        except ValueError:
+            parent_post_id = None
 
     if not author_name or not body:
         return redirect(f"/forum/{thread_id}")
 
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
+            if parent_post_id is not None:
+                cur.execute(
+                    """
+                    select 1
+                    from forum_posts
+                    where id = %s
+                      and thread_id = %s;
+                    """,
+                    (parent_post_id, thread_id),
+                )
+                if not cur.fetchone():
+                    parent_post_id = None
             cur.execute("""
-                insert into forum_posts (thread_id, user_id, author_name, body)
-                values (%s, %s, %s, %s);
-            """, (thread_id, user_id, author_name, body))
+                insert into forum_posts (thread_id, user_id, author_name, body, parent_post_id)
+                values (%s, %s, %s, %s, %s);
+            """, (thread_id, user_id, author_name, body, parent_post_id))
+            mark_forum_thread_seen(cur, user_id, thread_id)
 
         conn.commit()
 
     return redirect(f"/forum/{thread_id}")
+
+
+@app.post("/forum/<int:thread_id>/sticky")
+@admin_required
+def toggle_forum_thread_sticky(thread_id):
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                update forum_threads
+                set is_sticky = not is_sticky
+                where id = %s
+                returning is_sticky;
+                """,
+                (thread_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return "Tråden blev ikke fundet", 404
+        conn.commit()
+    return redirect(request.referrer or url_for("forum_thread", thread_id=thread_id))
+
+
+@app.post("/forum/post/<int:post_id>/like")
+@login_required
+def toggle_forum_post_like(post_id):
+    user_id = session.get("user_id")
+    if not user_id:
+        return redirect("/login")
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select thread_id
+                from forum_posts
+                where id = %s;
+                """,
+                (post_id,),
+            )
+            post = cur.fetchone()
+            if not post:
+                return "Indlæg blev ikke fundet", 404
+            thread_id = post[0]
+
+            cur.execute(
+                """
+                select 1
+                from forum_post_likes
+                where post_id = %s and user_id = %s;
+                """,
+                (post_id, user_id),
+            )
+            already_liked = cur.fetchone() is not None
+
+            if already_liked:
+                cur.execute(
+                    """
+                    delete from forum_post_likes
+                    where post_id = %s and user_id = %s;
+                    """,
+                    (post_id, user_id),
+                )
+            else:
+                cur.execute(
+                    """
+                    insert into forum_post_likes (post_id, user_id)
+                    values (%s, %s)
+                    on conflict (post_id, user_id) do nothing;
+                    """,
+                    (post_id, user_id),
+                )
+        conn.commit()
+
+    return redirect(url_for("forum_thread", thread_id=thread_id))
+
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -2672,6 +3061,8 @@ def upcoming_events_page():
             )
             events = cur.fetchall()
 
+    if session.get("user_id"):
+        mark_notification_seen(session.get("user_id"), "events")
     return render_template("upcoming_events.html", events=events)
 
 
@@ -2713,6 +3104,8 @@ def event_detail_page(event_id):
     else:
         rsvp_blocked_reason = "Log ind for at melde deltagelse."
 
+    if session.get("user_id"):
+        mark_notification_seen(session.get("user_id"), "events")
     return render_template(
         "event_detail.html",
         event=event,

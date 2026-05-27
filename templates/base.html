@@ -53,18 +53,30 @@
                     <a href="/stats" class="sidebar-link {% if '/stats' in request.path %}active{% endif %}">
                         <span class="sidebar-icon">↗</span>
                         <span>Leaderboard</span>
+                        {% if notif_leaderboard_count > 0 %}
+                        <span class="notif-badge">{{ notif_leaderboard_count }}</span>
+                        {% endif %}
                     </a>
                     <a href="{{ url_for('upcoming_events_page') }}" class="sidebar-link {% if '/begivenheder' in request.path %}active{% endif %}">
                         <span class="sidebar-icon">📅</span>
                         <span>Begivenheder</span>
+                        {% if notif_events_count > 0 %}
+                        <span class="notif-badge">{{ notif_events_count }}</span>
+                        {% endif %}
                     </a>
                     <a href="/forum" class="sidebar-link {% if '/forum' in request.path %}active{% endif %}">
                         <span class="sidebar-icon">💬</span>
                         <span>Forum</span>
+                        {% if notif_forum_count > 0 %}
+                        <span class="notif-badge">{{ notif_forum_count }}</span>
+                        {% endif %}
                     </a>
                     <a href="/rounds" class="sidebar-link {% if '/rounds' in request.path or request.path.startswith('/round/') %}active{% endif %}">
                         <span class="sidebar-icon">🏌</span>
                         <span>Runder</span>
+                        {% if notif_rounds_count > 0 %}
+                        <span class="notif-badge">{{ notif_rounds_count }}</span>
+                        {% endif %}
                     </a>
                     <a href="{{ url_for('qa') }}" class="sidebar-link {% if '/qa' in request.path %}active{% endif %}">
                         <span class="sidebar-icon">?</span>
