@@ -666,7 +666,7 @@ def fetch_course_stats(cur, season_year):
         select
             c.name,
             count(distinct r.id)::int as rounds_played,
-            coalesce(max(rp.season_points), 0) as top_points,
+            round(avg(rp.stableford_points), 2) as avg_stableford,
             round(avg(rp.season_points), 2) as avg_points,
             max(rp.stableford_points) as best_stableford,
             min(rp.stableford_points) as worst_stableford
@@ -683,6 +683,141 @@ def fetch_course_stats(cur, season_year):
         (season_year,),
     )
     return cur.fetchall()
+
+
+def fetch_leaderboard_progress(cur, season_year):
+    cur.execute(
+        """
+        with season_rounds as (
+            select id as round_id, round_date
+            from rounds
+            where season_year = %s
+            order by round_date, id
+        ),
+        active_players as (
+            select
+                p.id as player_id,
+                p.full_name,
+                (p.avatar_data is not null) as has_avatar
+            from players p
+            inner join round_players rp
+                on rp.player_id = p.id
+                and rp.status = 'played'
+            inner join rounds r
+                on r.id = rp.round_id
+                and r.season_year = %s
+            where p.is_active = true
+            group by p.id, p.full_name, p.avatar_data
+            having count(rp.id) > 0
+        ),
+        round_points as (
+            select
+                sr.round_id,
+                sr.round_date,
+                ap.player_id,
+                ap.full_name,
+                ap.has_avatar,
+                coalesce(rp.season_points, 0) as season_points
+            from season_rounds sr
+            cross join active_players ap
+            left join round_players rp
+                on rp.round_id = sr.round_id
+                and rp.player_id = ap.player_id
+                and rp.status = 'played'
+        ),
+        running as (
+            select
+                round_id,
+                round_date,
+                player_id,
+                full_name,
+                has_avatar,
+                sum(season_points) over (
+                    partition by player_id
+                    order by round_date, round_id
+                    rows between unbounded preceding and current row
+                ) as running_points
+            from round_points
+        )
+        select
+            round_id,
+            round_date,
+            player_id,
+            full_name,
+            has_avatar,
+            rank() over (
+                partition by round_id
+                order by running_points desc, full_name
+            ) as leaderboard_position
+        from running
+        order by round_date, round_id, full_name;
+        """,
+        (season_year, season_year),
+    )
+    rows = cur.fetchall()
+    if not rows:
+        return {"labels": [], "datasets": [], "max_rank": 1}
+
+    round_ids = []
+    labels = []
+    for row in rows:
+        round_id = row[0]
+        if round_id not in round_ids:
+            round_ids.append(round_id)
+            labels.append(str(row[1]))
+
+    index_by_round_id = {round_id: idx for idx, round_id in enumerate(round_ids)}
+    series_by_player = {}
+
+    for round_id, _, player_id, full_name, has_avatar, leaderboard_position in rows:
+        if player_id not in series_by_player:
+            series_by_player[player_id] = {
+                "player_id": player_id,
+                "label": full_name,
+                "has_avatar": bool(has_avatar),
+                "initial": (full_name or "?")[0].upper(),
+                "data": [None] * len(round_ids),
+            }
+        series_by_player[player_id]["data"][index_by_round_id[round_id]] = int(
+            leaderboard_position
+        )
+
+    palette = [
+        "#22c55e",
+        "#3b82f6",
+        "#f59e0b",
+        "#ef4444",
+        "#a855f7",
+        "#14b8a6",
+        "#eab308",
+        "#f97316",
+        "#06b6d4",
+        "#84cc16",
+    ]
+    datasets = []
+    for idx, player in enumerate(
+        sorted(series_by_player.values(), key=lambda x: x["label"].lower())
+    ):
+        if not any(value is not None for value in player["data"]):
+            continue
+        color = palette[idx % len(palette)]
+        datasets.append(
+            {
+                "player_id": player["player_id"],
+                "label": player["label"],
+                "has_avatar": player["has_avatar"],
+                "initial": player["initial"],
+                "data": player["data"],
+                "borderColor": color,
+                "backgroundColor": color,
+            }
+        )
+
+    if not datasets:
+        return {"labels": labels, "datasets": [], "max_rank": 1}
+
+    max_rank = len(datasets)
+    return {"labels": labels, "datasets": datasets, "max_rank": max_rank}
 
 
 def build_chart_series(progress_rows):
@@ -1793,11 +1928,13 @@ def stats():
             )
             player_stats = cur.fetchall()
             course_stats = fetch_course_stats(cur, selected_year)
+            leaderboard_progress = fetch_leaderboard_progress(cur, selected_year)
 
     return render_template(
         "stats.html",
         player_stats=player_stats,
         course_stats=course_stats,
+        leaderboard_progress=leaderboard_progress,
         sort=sort,
         direction=direction,
         selected_year=selected_year,
