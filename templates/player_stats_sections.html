@@ -35,6 +35,68 @@
     </div>
 </div>
 
+<div class="card h2h-card" id="head-to-head">
+    <div class="h2h-card__header">
+        <div>
+            <h2>Head-to-head</h2>
+            <p class="muted h2h-card__intro">
+                Direkte dueller på stableford i runder, hvor begge spillere har score.
+                Uafgjort tæller som remis.
+            </p>
+        </div>
+        {% if h2h_available_years %}
+        <form method="get" class="year-filter h2h-year-filter" action="{{ url_for('player_page', player_id=player[0]) }}">
+            <label for="h2h_year">Periode</label>
+            <select id="h2h_year" name="h2h_year" onchange="this.form.submit()">
+                <option value="all"{% if h2h_selected == 'all' %} selected{% endif %}>Alle sæsoner</option>
+                {% for y in h2h_available_years %}
+                <option value="{{ y }}"{% if h2h_selected == y|string %} selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </form>
+        {% endif %}
+    </div>
+
+    {% if head_to_head %}
+    <div class="table-wrap" style="margin-top: 12px;">
+        <table class="h2h-table">
+            <tr>
+                <th>Modstander</th>
+                <th>V–T–N</th>
+                <th>Net</th>
+                <th>Fælles runder</th>
+                <th></th>
+            </tr>
+            {% for row in head_to_head %}
+            {% set net = row[3] - row[4] %}
+            <tr>
+                <td>
+                    <div class="players-list-name">
+                        {% if row[2] %}
+                            <img class="mini-avatar" src="/player/{{ row[0] }}/avatar" alt="">
+                        {% else %}
+                            <span class="mini-avatar-fallback">{{ row[1][0] }}</span>
+                        {% endif %}
+                        <a class="player-link" href="{{ url_for('player_page', player_id=row[0]) }}">{{ row[1] }}</a>
+                    </div>
+                </td>
+                <td class="h2h-record">{{ row[3] }}–{{ row[5] }}–{{ row[4] }}</td>
+                <td class="h2h-net{% if net > 0 %} h2h-net--pos{% elif net < 0 %} h2h-net--neg{% endif %}">
+                    {% if net > 0 %}+{% endif %}{{ net }}
+                </td>
+                <td>{{ row[6] }}</td>
+                <td>
+                    <a class="secondary-btn h2h-detail-btn" href="{{ url_for('player_head_to_head_detail', player_id=player[0], opponent_id=row[0], h2h_year=h2h_selected) }}">Detaljer</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% else %}
+    <p class="muted" style="margin-top: 12px;">Ingen fælles runder i den valgte periode.</p>
+    {% endif %}
+</div>
+
 <div class="chart-card">
     <h2>Placering pr. runde</h2>
     {% if chart_labels %}

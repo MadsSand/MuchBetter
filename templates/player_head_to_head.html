@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}{{ player[1] }} mod {{ opponent[1] }}{% endblock %}
+
+{% block content %}
+<p class="profile-back-link">
+    <a href="{{ url_for('player_page', player_id=player[0], h2h_year=h2h_selected) }}#head-to-head">← Tilbage til head-to-head</a>
+</p>
+
+<div class="card h2h-detail-hero">
+    <div class="h2h-detail-players">
+        <div class="h2h-detail-player">
+            {% if player[2] %}
+                <img class="mini-avatar" src="/player/{{ player[0] }}/avatar" alt="">
+            {% else %}
+                <span class="mini-avatar-fallback">{{ player[1][0] }}</span>
+            {% endif %}
+            <strong>{{ player[1] }}</strong>
+        </div>
+        <span class="h2h-detail-vs">mod</span>
+        <div class="h2h-detail-player">
+            {% if opponent[2] %}
+                <img class="mini-avatar" src="/player/{{ opponent[0] }}/avatar" alt="">
+            {% else %}
+                <span class="mini-avatar-fallback">{{ opponent[1][0] }}</span>
+            {% endif %}
+            <a class="player-link" href="{{ url_for('player_page', player_id=opponent[0]) }}"><strong>{{ opponent[1] }}</strong></a>
+        </div>
+    </div>
+
+    {% if opponent_summary %}
+    {% set net = opponent_summary[3] - opponent_summary[4] %}
+    <p class="h2h-detail-summary">
+        Stilling:
+        <span class="h2h-record">{{ opponent_summary[3] }}–{{ opponent_summary[5] }}–{{ opponent_summary[4] }}</span>
+        (sejre – remiser – nederlag)
+        · Net <span class="h2h-net{% if net > 0 %} h2h-net--pos{% elif net < 0 %} h2h-net--neg{% endif %}">{% if net > 0 %}+{% endif %}{{ net }}</span>
+        · {{ opponent_summary[6] }} fælles runder
+    </p>
+    {% endif %}
+
+    {% if h2h_available_years %}
+    <form method="get" class="year-filter h2h-year-filter" action="{{ url_for('player_head_to_head_detail', player_id=player[0], opponent_id=opponent[0]) }}">
+        <label for="h2h_year">Periode</label>
+        <select id="h2h_year" name="h2h_year" onchange="this.form.submit()">
+            <option value="all"{% if h2h_selected == 'all' %} selected{% endif %}>Alle sæsoner</option>
+            {% for y in h2h_available_years %}
+            <option value="{{ y }}"{% if h2h_selected == y|string %} selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+        </select>
+    </form>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Runde for runde</h2>
+    <p class="muted">Stableford for {{ player[1] }} vs. {{ opponent[1] }}.</p>
+    <div class="table-wrap" style="margin-top: 12px;">
+        <table class="h2h-table h2h-matchups-table">
+            <tr>
+                <th>Dato</th>
+                <th>Bane</th>
+                <th>{{ player[1] }}</th>
+                <th>{{ opponent[1] }}</th>
+                <th>Resultat</th>
+            </tr>
+            {% for m in matchups %}
+            <tr>
+                <td><a class="round-link" href="/round/{{ m[0] }}">{{ m[1].strftime('%d.%m.%Y') }}</a></td>
+                <td>{{ m[2] }}</td>
+                <td>{{ m[3] }}</td>
+                <td>{{ m[4] }}</td>
+                <td>
+                    {% if m[5] == 'win' %}
+                        <span class="h2h-result h2h-result--win">Sejr</span>
+                    {% elif m[5] == 'loss' %}
+                        <span class="h2h-result h2h-result--loss">Nederlag</span>
+                    {% else %}
+                        <span class="h2h-result h2h-result--draw">Remis</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>
+{% endblock %}

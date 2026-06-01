@@ -6,7 +6,7 @@
 <h1>Spillere</h1>
 
 <div class="card">
-    <div class="muted">Alle aktive spillere i gruppen.</div>
+    <div class="muted">Spillere med mindst én spillet runde.</div>
     <div class="list" style="margin-top: 12px;">
         {% for player in players %}
             <div class="list-row">
@@ -26,7 +26,31 @@
                     {% endif %}
                 </div>
             </div>
+        {% else %}
+            <p class="muted">Ingen spillere har registreret en runde endnu.</p>
         {% endfor %}
     </div>
 </div>
+
+{% if inactive_players %}
+<div class="card" style="margin-top: 14px;">
+    <h2>Inaktivitetsliste</h2>
+    <div class="muted">Spillere uden spillede runder vises her, indtil de har spillet mindst én runde.</div>
+    <div class="list" style="margin-top: 12px;">
+        {% for player in inactive_players %}
+            <div class="list-row">
+                <div class="players-list-name">
+                    {% if player[2] %}
+                        <img class="mini-avatar" src="/player/{{ player[0] }}/avatar" alt="Avatar for {{ player[1] }}">
+                    {% else %}
+                        <span class="mini-avatar-fallback">{{ player[1][0] }}</span>
+                    {% endif %}
+                    <a class="player-link" href="/player/{{ player[0] }}">{{ player[1] }}</a>
+                </div>
+                <div class="muted">0 runder</div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 {% endblock %}

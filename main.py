@@ -1509,6 +1509,121 @@ def load_player_stats_bundle(cur, player_id):
     }
 
 
+def fetch_head_to_head_years(cur, player_id):
+    cur.execute(
+        """
+        select distinct r.season_year
+        from round_players me
+        join round_players opp
+            on opp.round_id = me.round_id
+           and opp.player_id != me.player_id
+           and opp.status = 'played'
+        join rounds r on r.id = me.round_id
+        where me.player_id = %s
+          and me.status = 'played'
+        order by r.season_year desc;
+        """,
+        (player_id,),
+    )
+    return [row[0] for row in cur.fetchall()]
+
+
+def resolve_head_to_head_year(year_raw, available_years):
+    if year_raw == "all":
+        return None
+    if year_raw.isdigit():
+        year = int(year_raw)
+        if year in available_years:
+            return year
+    if available_years:
+        return available_years[0]
+    return None
+
+
+def fetch_head_to_head_summary(cur, player_id, season_year=None):
+    params = [player_id]
+    season_clause = ""
+    if season_year is not None:
+        season_clause = "and r.season_year = %s"
+        params.append(season_year)
+
+    cur.execute(
+        f"""
+        select
+            opp_p.id,
+            opp_p.full_name,
+            opp_p.avatar_data is not null as has_avatar,
+            count(*) filter (
+                where me.stableford_points > opp.stableford_points
+            ) as wins,
+            count(*) filter (
+                where me.stableford_points < opp.stableford_points
+            ) as losses,
+            count(*) filter (
+                where me.stableford_points = opp.stableford_points
+            ) as draws,
+            count(*) as shared_rounds
+        from round_players me
+        join round_players opp
+            on opp.round_id = me.round_id
+           and opp.player_id != me.player_id
+           and opp.status = 'played'
+        join players opp_p
+            on opp_p.id = opp.player_id
+           and opp_p.is_active = true
+        join rounds r on r.id = me.round_id
+        where me.player_id = %s
+          and me.status = 'played'
+          {season_clause}
+        group by opp_p.id, opp_p.full_name, opp_p.avatar_data
+        having count(*) > 0
+        order by
+            count(*) filter (where me.stableford_points > opp.stableford_points)
+            - count(*) filter (where me.stableford_points < opp.stableford_points) desc,
+            opp_p.full_name;
+        """,
+        tuple(params),
+    )
+    return cur.fetchall()
+
+
+def fetch_head_to_head_matchups(cur, player_id, opponent_id, season_year=None):
+    params = [player_id, opponent_id]
+    season_clause = ""
+    if season_year is not None:
+        season_clause = "and r.season_year = %s"
+        params.append(season_year)
+
+    cur.execute(
+        f"""
+        select
+            r.id,
+            r.round_date,
+            c.name,
+            me.stableford_points,
+            opp.stableford_points,
+            case
+                when me.stableford_points > opp.stableford_points then 'win'
+                when me.stableford_points < opp.stableford_points then 'loss'
+                else 'draw'
+            end as result
+        from round_players me
+        join round_players opp
+            on opp.round_id = me.round_id
+           and opp.player_id = %s
+           and opp.status = 'played'
+        join rounds r on r.id = me.round_id
+        join courses c on c.id = r.course_id
+        where me.player_id = %s
+          and me.status = 'played'
+          {season_clause}
+        order by r.round_date desc, r.id desc;
+        """,
+        tuple(params),
+    )
+    return cur.fetchall()
+
+
 def admin_required(view_func):
     @wraps(view_func)
     def wrapped_view(*args, **kwargs):
@@ -2407,6 +2522,7 @@ def stats():
                     p.avatar_data,
                     ct.total_points,
                     pt.prev_points
+                having count(*) filter (where rp.status = 'played') > 0
                 order by {order_by} {order_direction} nulls last, p.full_name;
             """
             cur.execute(
@@ -2446,16 +2562,26 @@ def players():
                     p.id,
                     p.full_name,
                     p.avatar_data is not null as has_avatar,
-                    u.id as linked_user_id
+                    u.id as linked_user_id,
+                    count(*) filter (where rp.status = 'played') as rounds_played
                 from players p
                 left join users u on u.player_id = p.id and u.is_approved = true
+                left join round_players rp on rp.player_id = p.id
                 where p.is_active = true
+                group by p.id, p.full_name, p.avatar_data, u.id
                 order by p.full_name;
                 """
             )
             player_rows = cur.fetchall()
 
-    return render_template("players.html", players=player_rows)
+    active_players = [row for row in player_rows if int(row[4] or 0) > 0]
+    inactive_players = [row for row in player_rows if int(row[4] or 0) == 0]
+
+    return render_template(
+        "players.html",
+        players=active_players,
+        inactive_players=inactive_players,
+    )
 
 @app.get("/health")
 def health():
@@ -2463,12 +2589,27 @@ def health():
 
 @app.get("/player/<int:player_id>")
 def player_page(player_id):
+    h2h_year_raw = (request.args.get("h2h_year") or "").strip()
+
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
             bundle = load_player_stats_bundle(cur, player_id)
             if not bundle:
                 return "Spilleren blev ikke fundet", 404
             player = bundle["player"]
+            h2h_available_years = fetch_head_to_head_years(cur, player_id)
+            h2h_season_year = resolve_head_to_head_year(
+                h2h_year_raw, h2h_available_years
+            )
+            if h2h_year_raw == "all":
+                h2h_selected = "all"
+            elif h2h_season_year is not None:
+                h2h_selected = str(h2h_season_year)
+            else:
+                h2h_selected = "all"
+            head_to_head = fetch_head_to_head_summary(
+                cur, player_id, h2h_season_year
+            )
             cur.execute(
                 """
                 select id
@@ -2505,6 +2646,77 @@ def player_page(player_id):
         chart_round_money=bundle["chart_round_money"],
         chart_running_points=bundle["chart_running_points"],
         chart_running_money=bundle["chart_running_money"],
+        head_to_head=head_to_head,
+        h2h_available_years=h2h_available_years,
+        h2h_selected=h2h_selected,
+    )
+
+
+@app.get("/player/<int:player_id>/mod/<int:opponent_id>")
+def player_head_to_head_detail(player_id, opponent_id):
+    h2h_year_raw = (request.args.get("h2h_year") or "").strip()
+
+    with psycopg.connect(DB_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select id, full_name, avatar_data is not null as has_avatar
+                from players
+                where id = %s and is_active = true;
+                """,
+                (player_id,),
+            )
+            player = cur.fetchone()
+            if not player:
+                return "Spilleren blev ikke fundet", 404
+
+            cur.execute(
+                """
+                select id, full_name, avatar_data is not null as has_avatar
+                from players
+                where id = %s and is_active = true;
+                """,
+                (opponent_id,),
+            )
+            opponent = cur.fetchone()
+            if not opponent:
+                return "Modstanderen blev ikke fundet", 404
+
+            h2h_available_years = fetch_head_to_head_years(cur, player_id)
+            h2h_season_year = resolve_head_to_head_year(
+                h2h_year_raw, h2h_available_years
+            )
+            if h2h_year_raw == "all":
+                h2h_selected = "all"
+            elif h2h_season_year is not None:
+                h2h_selected = str(h2h_season_year)
+            else:
+                h2h_selected = "all"
+
+            matchups = fetch_head_to_head_matchups(
+                cur, player_id, opponent_id, h2h_season_year
+            )
+            if not matchups:
+                return "Ingen fælles runder fundet for det valgte filter", 404
+
+            summary = fetch_head_to_head_summary(
+                cur, player_id, h2h_season_year
+            )
+            opponent_summary = next(
+                (row for row in summary if row[0] == opponent_id), None
+            )
+
+    is_own_profile = session.get("player_id") == player_id
+
+    return render_template(
+        "player_head_to_head.html",
+        player=player,
+        opponent=opponent,
+        opponent_summary=opponent_summary,
+        matchups=matchups,
+        is_own_profile=is_own_profile,
+        h2h_available_years=h2h_available_years,
+        h2h_selected=h2h_selected,
     )
 
 
