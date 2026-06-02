@@ -1588,7 +1588,8 @@ def fetch_head_to_head_summary(cur, player_id, season_year=None):
 
 
 def fetch_head_to_head_matchups(cur, player_id, opponent_id, season_year=None):
-    params = [player_id, opponent_id]
+    # Placeholder order in SQL is: opponent first (join), then player (where).
+    params = [opponent_id, player_id]
     season_clause = ""
     if season_year is not None:
         season_clause = "and r.season_year = %s"
