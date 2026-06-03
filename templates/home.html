@@ -238,6 +238,17 @@
     {% endcall %}
 </div>
 
+{% if points_progress and points_progress.labels %}
+{% call home_panel('points_chart', 'home-panel--block leaderboard-progress-card') %}
+<div class="home-panel__content">
+    <h2>Point pr. runde · sæson {{ home_season_year }}</h2>
+    <p class="muted">Samlede sæsonpoint efter hver runde. Klik på en spiller i legenden for at vise eller skjule linjen.</p>
+    {% with progress=points_progress, chart_id='homePointsProgressChart', legend_id='homePointsChartLegend', chart_mode='points' %}
+    {% include '_leaderboard_season_chart.html' %}
+    {% endwith %}
+</div>
+{% endcall %}
+{% endif %}
 
 {% call home_panel('forum', 'home-panel--block forum-box') %}
 <div class="home-panel__content">

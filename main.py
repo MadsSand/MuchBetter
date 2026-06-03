@@ -1168,7 +1168,21 @@ def fetch_course_stats(cur, season_year):
     return cur.fetchall()
 
 
-def fetch_leaderboard_progress(cur, season_year):
+CHART_PLAYER_PALETTE = [
+    "#22c55e",
+    "#3b82f6",
+    "#f59e0b",
+    "#ef4444",
+    "#a855f7",
+    "#14b8a6",
+    "#eab308",
+    "#f97316",
+    "#06b6d4",
+    "#84cc16",
+]
+
+
+def _fetch_season_running_points_rows(cur, season_year):
     cur.execute(
         """
         with season_rounds as (
@@ -1228,18 +1242,18 @@ def fetch_leaderboard_progress(cur, season_year):
             player_id,
             full_name,
             has_avatar,
-            rank() over (
-                partition by round_id
-                order by running_points desc, full_name
-            ) as leaderboard_position
+            running_points
         from running
         order by round_date, round_id, full_name;
         """,
         (season_year, season_year),
     )
-    rows = cur.fetchall()
+    return cur.fetchall()
+
+
+def _build_season_line_chart(rows, *, value_from_row):
     if not rows:
-        return {"labels": [], "datasets": [], "max_rank": 1}
+        return {"labels": [], "datasets": [], "y_max": 1}
 
     round_ids = []
     labels = []
@@ -1252,7 +1266,11 @@ def fetch_leaderboard_progress(cur, season_year):
     index_by_round_id = {round_id: idx for idx, round_id in enumerate(round_ids)}
     series_by_player = {}
 
-    for round_id, _, player_id, full_name, has_avatar, leaderboard_position in rows:
+    for row in rows:
+        round_id = row[0]
+        player_id = row[2]
+        full_name = row[3]
+        has_avatar = row[4]
         if player_id not in series_by_player:
             series_by_player[player_id] = {
                 "player_id": player_id,
@@ -1261,29 +1279,21 @@ def fetch_leaderboard_progress(cur, season_year):
                 "initial": (full_name or "?")[0].upper(),
                 "data": [None] * len(round_ids),
             }
-        series_by_player[player_id]["data"][index_by_round_id[round_id]] = int(
-            leaderboard_position
+        series_by_player[player_id]["data"][index_by_round_id[round_id]] = value_from_row(
+            row
         )
 
-    palette = [
-        "#22c55e",
-        "#3b82f6",
-        "#f59e0b",
-        "#ef4444",
-        "#a855f7",
-        "#14b8a6",
-        "#eab308",
-        "#f97316",
-        "#06b6d4",
-        "#84cc16",
-    ]
     datasets = []
+    y_max = 0
     for idx, player in enumerate(
         sorted(series_by_player.values(), key=lambda x: x["label"].lower())
     ):
         if not any(value is not None for value in player["data"]):
             continue
-        color = palette[idx % len(palette)]
+        color = CHART_PLAYER_PALETTE[idx % len(CHART_PLAYER_PALETTE)]
+        for value in player["data"]:
+            if value is not None:
+                y_max = max(y_max, value)
         datasets.append(
             {
                 "player_id": player["player_id"],
@@ -1297,10 +1307,65 @@ def fetch_leaderboard_progress(cur, season_year):
         )
 
     if not datasets:
-        return {"labels": labels, "datasets": [], "max_rank": 1}
+        return {"labels": labels, "datasets": [], "y_max": 1}
 
-    max_rank = len(datasets)
-    return {"labels": labels, "datasets": datasets, "max_rank": max_rank}
+    return {"labels": labels, "datasets": datasets, "y_max": y_max}
+
+
+def fetch_leaderboard_progress(cur, season_year):
+    rows = _fetch_season_running_points_rows(cur, season_year)
+    if not rows:
+        return {"labels": [], "datasets": [], "max_rank": 1}
+
+    round_ids = []
+    labels = []
+    for row in rows:
+        round_id = row[0]
+        if round_id not in round_ids:
+            round_ids.append(round_id)
+            labels.append(str(row[1]))
+
+    index_by_round_id = {round_id: idx for idx, round_id in enumerate(round_ids)}
+    position_by_round_player = {}
+
+    for row in rows:
+        round_id = row[0]
+        player_id = row[2]
+        running_points = float(row[5])
+        position_by_round_player.setdefault(round_id, []).append(
+            (player_id, row[3], row[4], running_points)
+        )
+
+    ranked_rows = []
+    for round_id in round_ids:
+        round_date = next(row[1] for row in rows if row[0] == round_id)
+        entries = sorted(
+            position_by_round_player[round_id],
+            key=lambda item: (-item[3], item[1]),
+        )
+        for rank, (player_id, full_name, has_avatar, _) in enumerate(entries, start=1):
+            ranked_rows.append(
+                (round_id, round_date, player_id, full_name, has_avatar, rank)
+            )
+
+    chart = _build_season_line_chart(
+        ranked_rows,
+        value_from_row=lambda row: int(row[5]),
+    )
+    chart["max_rank"] = len(chart["datasets"]) or 1
+    return chart
+
+
+def fetch_leaderboard_points_progress(cur, season_year):
+    rows = _fetch_season_running_points_rows(cur, season_year)
+    chart = _build_season_line_chart(
+        rows,
+        value_from_row=lambda row: float(row[5]),
+    )
+    chart["max_points"] = chart.pop("y_max")
+    if chart["max_points"] < 1:
+        chart["max_points"] = 1
+    return chart
 
 
 def build_chart_series(progress_rows):
@@ -1900,6 +1965,22 @@ def home():
 
             home_backgrounds = fetch_home_backgrounds(cur)
 
+            cur.execute(
+                """
+                select season_year
+                from rounds
+                order by round_date desc, id desc
+                limit 1;
+                """
+            )
+            season_row = cur.fetchone()
+            home_season_year = (
+                season_row[0] if season_row else date.today().year
+            )
+            points_progress = fetch_leaderboard_points_progress(
+                cur, home_season_year
+            )
+
     cal_events = [
         {"y": r[2].year, "m": r[2].month, "d": r[2].day, "t": r[1]}
         for r in upcoming_for_calendar
@@ -1930,6 +2011,8 @@ def home():
         upcoming_cal_json=upcoming_cal_json,
         round_highlights=round_highlights,
         home_backgrounds=home_backgrounds,
+        points_progress=points_progress,
+        home_season_year=home_season_year,
     )
 
 @app.get("/new")

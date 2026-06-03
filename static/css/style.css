@@ -1391,6 +1391,37 @@ canvas {
     flex: 1 1 auto;
     min-width: 0;
     height: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.leaderboard-chart-hint {
+    display: none;
+    margin: 0;
+    font-size: 13px;
+}
+
+.leaderboard-chart-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-gutter: stable;
+}
+
+.leaderboard-chart-inner {
+    height: 100%;
+    min-width: 100%;
+}
+
+.leaderboard-chart-scroll canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .leaderboard-html-legend {
@@ -1446,14 +1477,40 @@ canvas {
         flex-direction: column;
     }
 
+    .leaderboard-chart-wrap {
+        height: 420px;
+    }
+
+    .leaderboard-chart-hint {
+        display: block;
+    }
+
     .leaderboard-html-legend {
         flex: 1 1 auto;
         max-width: none;
+        padding-top: 0;
     }
 
     .leaderboard-html-legend__list {
         flex-direction: row;
         flex-wrap: wrap;
+        gap: 8px 14px;
+    }
+
+    .leaderboard-html-legend__item {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 600px) {
+    .leaderboard-chart-wrap {
+        height: 360px;
+    }
+
+    .leaderboard-chart-scroll {
+        border-radius: 12px;
+        background: var(--surface-2);
+        padding-bottom: 4px;
     }
 }
 

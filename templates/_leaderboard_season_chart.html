@@ -1,0 +1,342 @@
+{# chart_mode: "placement" | "points" #}
+<div class="leaderboard-chart-layout">
+    <div class="leaderboard-chart-wrap">
+        <p class="leaderboard-chart-hint muted">Stryg vandret for at se alle runder</p>
+        <div class="leaderboard-chart-scroll">
+            <div class="leaderboard-chart-inner">
+                <canvas id="{{ chart_id }}"></canvas>
+            </div>
+        </div>
+    </div>
+    <div id="{{ legend_id }}" class="leaderboard-html-legend" aria-label="Spillere i grafen"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function () {
+    const labels = {{ progress.labels|tojson }};
+    const datasets = {{ progress.datasets|tojson }};
+    const chartMode = {{ chart_mode|tojson }};
+    const yMaxPlacement = {{ progress.max_rank|default(1)|tojson }};
+    const yMaxPoints = {{ progress.max_points|default(1)|tojson }};
+    if (!labels || !labels.length || !datasets || !datasets.length) return;
+
+    const lastRoundIndex = labels.length - 1;
+    const canvas = document.getElementById({{ chart_id|tojson }});
+    if (!canvas) return;
+
+    const chartWrap = canvas.closest(".leaderboard-chart-wrap");
+    const chartInner = canvas.closest(".leaderboard-chart-inner");
+    const chartScroll = canvas.closest(".leaderboard-chart-scroll");
+
+    function chartLayout() {
+        const narrow = window.matchMedia("(max-width: 700px)").matches;
+        const tablet = window.matchMedia("(max-width: 900px)").matches;
+        return {
+            narrow: narrow,
+            tablet: tablet,
+            minWidthPerRound: narrow ? 72 : (tablet ? 52 : 40),
+            avatarRadius: narrow ? 10 : 14,
+            pointRadius: narrow ? 4 : 3,
+            xMaxTicks: narrow ? 6 : (tablet ? 10 : undefined),
+            xTickRotation: narrow ? 40 : (tablet ? 25 : 0),
+        };
+    }
+
+    function applyChartSizing() {
+        const layout = chartLayout();
+        const viewportWidth = chartScroll
+            ? chartScroll.clientWidth
+            : (chartWrap ? chartWrap.clientWidth : 320);
+        const minWidth = Math.max(
+            viewportWidth,
+            labels.length * layout.minWidthPerRound + 96
+        );
+        if (chartInner) {
+            chartInner.style.minWidth = minWidth + "px";
+        }
+        return layout;
+    }
+
+    let layout = applyChartSizing();
+    let avatarRadius = layout.avatarRadius;
+
+    function loadAvatarImage(playerId) {
+        return new Promise(function (resolve) {
+            const img = new Image();
+            img.onload = function () { resolve(img); };
+            img.onerror = function () { resolve(null); };
+            img.src = "/player/" + playerId + "/avatar";
+        });
+    }
+
+    function getOrCreateLegendList(chart, containerId) {
+        const legendContainer = document.getElementById(containerId);
+        let listContainer = legendContainer.querySelector("ul");
+        if (!listContainer) {
+            listContainer = document.createElement("ul");
+            listContainer.className = "leaderboard-html-legend__list";
+            legendContainer.appendChild(listContainer);
+        }
+        return listContainer;
+    }
+
+    const htmlLegendPlugin = {
+        id: "htmlLegend",
+        afterUpdate: function (chart, _args, options) {
+            const ul = getOrCreateLegendList(chart, options.containerID);
+            while (ul.firstChild) {
+                ul.firstChild.remove();
+            }
+
+            const items = chart.options.plugins.legend.labels.generateLabels(chart);
+            items.forEach(function (item) {
+                const li = document.createElement("li");
+                li.className = "leaderboard-html-legend__item";
+                if (item.hidden) {
+                    li.classList.add("is-hidden");
+                }
+
+                const box = document.createElement("span");
+                box.className = "leaderboard-html-legend__swatch";
+                box.style.background = item.strokeStyle;
+
+                const label = document.createElement("span");
+                label.className = "leaderboard-html-legend__label";
+                label.textContent = item.text;
+
+                li.appendChild(box);
+                li.appendChild(label);
+                li.onclick = function () {
+                    chart.setDatasetVisibility(
+                        item.datasetIndex,
+                        !chart.isDatasetVisible(item.datasetIndex)
+                    );
+                    chart.update();
+                };
+
+                ul.appendChild(li);
+            });
+        }
+    };
+
+    function makeAvatarPlugin(avatarImages) {
+        return {
+            id: "leaderboardAvatars",
+            afterDatasetsDraw: function (chart) {
+                const ctx = chart.ctx;
+                const images = avatarImages;
+                chart.data.datasets.forEach(function (dataset, datasetIndex) {
+                    const meta = chart.getDatasetMeta(datasetIndex);
+                    if (!meta.visible) return;
+                    const value = dataset.data[lastRoundIndex];
+                    if (value == null) return;
+                    const point = meta.data[lastRoundIndex];
+                    if (!point) return;
+
+                    const x = point.x;
+                    const y = point.y;
+                    const img = images[dataset.playerId];
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(x, y, avatarRadius, 0, Math.PI * 2);
+                    ctx.closePath();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = dataset.borderColor || "#22c55e";
+
+                    if (img) {
+                        ctx.clip();
+                        ctx.drawImage(
+                            img,
+                            x - avatarRadius,
+                            y - avatarRadius,
+                            avatarRadius * 2,
+                            avatarRadius * 2
+                        );
+                        ctx.restore();
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(x, y, avatarRadius, 0, Math.PI * 2);
+                        ctx.stroke();
+                    } else {
+                        ctx.fillStyle = "#202820";
+                        ctx.fill();
+                        ctx.stroke();
+                        ctx.fillStyle = "#f3f4f2";
+                        ctx.font = "bold 12px system-ui, sans-serif";
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        ctx.fillText(dataset.initial || "?", x, y);
+                    }
+                    ctx.restore();
+                });
+            }
+        };
+    }
+
+    function buildYScale(currentLayout) {
+        const placementTicks = {
+            stepSize: 1,
+            precision: 0,
+            includeBounds: true,
+            font: { size: currentLayout.narrow ? 12 : 11 }
+        };
+        if (!currentLayout.narrow) {
+            placementTicks.autoSkip = false;
+        }
+
+        if (chartMode === "placement") {
+            return {
+                reverse: true,
+                min: 1,
+                max: yMaxPlacement,
+                ticks: placementTicks,
+                title: {
+                    display: true,
+                    text: "Placering"
+                }
+            };
+        }
+
+        return {
+            reverse: false,
+            beginAtZero: true,
+            suggestedMax: Math.ceil(yMaxPoints * 1.08),
+            ticks: {
+                precision: 0,
+                font: { size: currentLayout.narrow ? 12 : 11 }
+            },
+            title: {
+                display: true,
+                text: "Point"
+            }
+        };
+    }
+
+    function buildXScale(currentLayout) {
+        const ticks = {
+            padding: 6,
+            maxRotation: currentLayout.xTickRotation,
+            minRotation: currentLayout.xTickRotation,
+            font: { size: currentLayout.narrow ? 11 : 10 }
+        };
+        if (currentLayout.xMaxTicks) {
+            ticks.autoSkip = true;
+            ticks.maxTicksLimit = currentLayout.xMaxTicks;
+        }
+        return {
+            offset: true,
+            title: {
+                display: !currentLayout.narrow,
+                text: "Runder"
+            },
+            ticks: ticks
+        };
+    }
+
+    Promise.all(
+        datasets.map(function (ds) {
+            const playerId = ds.player_id;
+            if (!ds.has_avatar) {
+                return Promise.resolve([playerId, null]);
+            }
+            return loadAvatarImage(playerId).then(function (img) {
+                return [playerId, img];
+            });
+        })
+    ).then(function (entries) {
+        const avatarImages = {};
+        entries.forEach(function (entry) {
+            avatarImages[entry[0]] = entry[1];
+        });
+
+        const chartInstance = new Chart(canvas, {
+            type: "line",
+            data: {
+                labels: labels,
+                datasets: datasets.map(function (ds) {
+                    return {
+                        label: ds.label,
+                        data: ds.data,
+                        playerId: ds.player_id,
+                        hasAvatar: ds.has_avatar,
+                        initial: ds.initial,
+                        borderColor: ds.borderColor,
+                        backgroundColor: ds.backgroundColor,
+                        tension: 0.2,
+                        pointRadius: ds.data.map(function (value, index) {
+                            return index === lastRoundIndex && value != null
+                                ? 0
+                                : layout.pointRadius;
+                        }),
+                        pointHoverRadius: ds.data.map(function (value, index) {
+                            return index === lastRoundIndex && value != null
+                                ? 0
+                                : layout.pointRadius + 2;
+                        }),
+                        spanGaps: true
+                    };
+                })
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 16,
+                        right: layout.narrow ? 28 : 40,
+                        bottom: layout.narrow ? 8 : 16,
+                        left: layout.narrow ? 4 : 12
+                    }
+                },
+                interaction: { mode: "nearest", intersect: false },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    htmlLegend: {
+                        containerID: {{ legend_id|tojson }}
+                    }
+                },
+                scales: {
+                    y: buildYScale(layout),
+                    x: buildXScale(layout)
+                }
+            },
+            plugins: [htmlLegendPlugin, makeAvatarPlugin(avatarImages)]
+        });
+
+        let resizeTimer = null;
+        function onChartResize() {
+            layout = applyChartSizing();
+            avatarRadius = layout.avatarRadius;
+            chartInstance.options.scales.y = buildYScale(layout);
+            chartInstance.options.scales.x = buildXScale(layout);
+            chartInstance.options.layout.padding.right = layout.narrow ? 28 : 40;
+            chartInstance.data.datasets.forEach(function (ds) {
+                ds.pointRadius = ds.data.map(function (value, index) {
+                    return index === lastRoundIndex && value != null
+                        ? 0
+                        : layout.pointRadius;
+                });
+            });
+            chartInstance.resize();
+            chartInstance.update("none");
+        }
+
+        window.addEventListener("resize", function () {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(onChartResize, 150);
+        });
+
+        if (chartScroll) {
+            requestAnimationFrame(function () {
+                chartScroll.scrollLeft = chartScroll.scrollWidth;
+            });
+        }
+    }).catch(function (err) {
+        console.error("Sæson-graf fejlede:", err);
+    });
+})();
+</script>
