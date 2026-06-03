@@ -184,6 +184,32 @@
         (function () {
             const toggle = document.querySelector(".sidebar-toggle");
             const sidebar = document.querySelector(".sidebar");
+            const topbar = document.querySelector(".topbar");
+            const mobileTopbarMq = window.matchMedia("(max-width: 760px)");
+
+            function syncMobileTopbarOffset() {
+                if (!topbar) return;
+                if (mobileTopbarMq.matches) {
+                    const h = topbar.offsetHeight;
+                    document.documentElement.style.setProperty(
+                        "--mobile-topbar-height",
+                        h + "px"
+                    );
+                } else {
+                    document.documentElement.style.removeProperty(
+                        "--mobile-topbar-height"
+                    );
+                }
+            }
+
+            syncMobileTopbarOffset();
+            window.addEventListener("resize", syncMobileTopbarOffset);
+            if (mobileTopbarMq.addEventListener) {
+                mobileTopbarMq.addEventListener("change", syncMobileTopbarOffset);
+            } else {
+                mobileTopbarMq.addListener(syncMobileTopbarOffset);
+            }
+
             if (!toggle || !sidebar) return;
 
             toggle.addEventListener("click", function () {

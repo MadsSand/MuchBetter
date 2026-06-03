@@ -1251,7 +1251,34 @@ def _fetch_season_running_points_rows(cur, season_year):
     return cur.fetchall()
 
 
-def _build_season_line_chart(rows, *, value_from_row):
+def format_chart_legend_points(value) -> str:
+    if value is None:
+        return "0"
+    amount = float(value)
+    if abs(amount - round(amount)) < 0.01:
+        return str(int(round(amount)))
+    return f"{amount:.1f}".replace(".", ",")
+
+
+def format_chart_legend_label(full_name: str, season_points) -> str:
+    return f"{full_name} · {format_chart_legend_points(season_points)} point"
+
+
+def _last_chart_value(data):
+    for value in reversed(data):
+        if value is not None:
+            return value
+    return None
+
+
+def _build_season_line_chart(
+    rows,
+    *,
+    value_from_row,
+    sort_by="points_desc",
+    legend_points_from_row=None,
+    legend_points_by_player=None,
+):
     if not rows:
         return {"labels": [], "datasets": [], "y_max": 1}
 
@@ -1274,7 +1301,7 @@ def _build_season_line_chart(rows, *, value_from_row):
         if player_id not in series_by_player:
             series_by_player[player_id] = {
                 "player_id": player_id,
-                "label": full_name,
+                "full_name": full_name,
                 "has_avatar": bool(has_avatar),
                 "initial": (full_name or "?")[0].upper(),
                 "data": [None] * len(round_ids),
@@ -1282,14 +1309,42 @@ def _build_season_line_chart(rows, *, value_from_row):
         series_by_player[player_id]["data"][index_by_round_id[round_id]] = value_from_row(
             row
         )
+        if legend_points_from_row is not None:
+            series_by_player[player_id]["legend_points"] = legend_points_from_row(row)
+
+    if legend_points_by_player:
+        for player in series_by_player.values():
+            player["legend_points"] = legend_points_by_player.get(player["player_id"], 0)
+
+    active_players = [
+        player
+        for player in series_by_player.values()
+        if any(value is not None for value in player["data"])
+    ]
+
+    for player in active_players:
+        if "legend_points" not in player:
+            last_value = _last_chart_value(player["data"])
+            player["legend_points"] = float(last_value) if last_value is not None else 0
+
+    if sort_by == "rank_asc":
+        active_players.sort(
+            key=lambda player: (
+                _last_chart_value(player["data"]) or 999,
+                player["full_name"].lower(),
+            )
+        )
+    else:
+        active_players.sort(
+            key=lambda player: (
+                -player["legend_points"],
+                player["full_name"].lower(),
+            )
+        )
 
     datasets = []
     y_max = 0
-    for idx, player in enumerate(
-        sorted(series_by_player.values(), key=lambda x: x["label"].lower())
-    ):
-        if not any(value is not None for value in player["data"]):
-            continue
+    for idx, player in enumerate(active_players):
         color = CHART_PLAYER_PALETTE[idx % len(CHART_PLAYER_PALETTE)]
         for value in player["data"]:
             if value is not None:
@@ -1297,7 +1352,9 @@ def _build_season_line_chart(rows, *, value_from_row):
         datasets.append(
             {
                 "player_id": player["player_id"],
-                "label": player["label"],
+                "label": format_chart_legend_label(
+                    player["full_name"], player["legend_points"]
+                ),
                 "has_avatar": player["has_avatar"],
                 "initial": player["initial"],
                 "data": player["data"],
@@ -1348,9 +1405,15 @@ def fetch_leaderboard_progress(cur, season_year):
                 (round_id, round_date, player_id, full_name, has_avatar, rank)
             )
 
+    legend_points_by_player = {}
+    for row in rows:
+        legend_points_by_player[row[2]] = float(row[5])
+
     chart = _build_season_line_chart(
         ranked_rows,
         value_from_row=lambda row: int(row[5]),
+        sort_by="rank_asc",
+        legend_points_by_player=legend_points_by_player,
     )
     chart["max_rank"] = len(chart["datasets"]) or 1
     return chart
@@ -1361,6 +1424,8 @@ def fetch_leaderboard_points_progress(cur, season_year):
     chart = _build_season_line_chart(
         rows,
         value_from_row=lambda row: float(row[5]),
+        sort_by="points_desc",
+        legend_points_from_row=lambda row: float(row[5]),
     )
     chart["max_points"] = chart.pop("y_max")
     if chart["max_points"] < 1:
