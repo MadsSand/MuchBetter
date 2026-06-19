@@ -32,7 +32,7 @@
 
 <div class="card">
     <h2>Sæson {{ selected_year }}</h2>
-    <div class="muted">Aktive spillere i valgt sæson. Klik på ▲ eller ▼ ved en kolonne for at sortere.</div>
+    <div class="muted leaderboard-sort-help">Aktive spillere i valgt sæson. Klik på ▲ eller ▼ ved en kolonne for at sortere.</div>
 
     {% if player_stats %}
     <div class="table-wrap" style="margin-top: 12px;">
@@ -50,25 +50,27 @@
             </tr>
 
             {% for r in player_stats %}
+            {% set name_parts = r[1].split() %}
             <tr>
-                <td>{{ loop.index }}</td>
-                <td>
+                <td class="leaderboard-pos">{{ loop.index }}</td>
+                <td class="leaderboard-player-cell">
                     <div class="players-list-name">
                         {% if r[2] %}
                             <img class="mini-avatar" src="/player/{{ r[0] }}/avatar" alt="Avatar for {{ r[1] }}">
                         {% else %}
                             <span class="mini-avatar-fallback">{{ r[1][0] }}</span>
                         {% endif %}
+                        <span class="leaderboard-mobile-initials" aria-hidden="true">{{ name_parts[0][0] }}{% if name_parts|length > 1 %}{{ name_parts[-1][0] }}{% endif %}</span>
                         <a class="player-link" href="/player/{{ r[0] }}">{{ r[1] }}</a>
                     </div>
                 </td>
-                <td>{{ r[3] }}</td>
-                <td>{{ r[4] if r[4] is not none else "" }}</td>
-                <td>{{ r[5] if r[5] is not none else "" }}</td>
-                <td>{{ r[6] }}</td>
-                <td>{{ r[7] }}</td>
-                <td>{{ r[8] if r[8] is not none else 0 }}</td>
-                <td>
+                <td data-label="Runder">{{ r[3] }}</td>
+                <td class="leaderboard-avg-cell" data-label="Snit stableford">{{ r[4] if r[4] is not none else "" }}</td>
+                <td data-label="Bedste">{{ r[5] if r[5] is not none else "" }}</td>
+                <td data-label="Sejre">{{ r[6] }}</td>
+                <td data-label="Top 3">{{ r[7] }}</td>
+                <td class="leaderboard-total-cell" data-label="Total point">{{ r[8] if r[8] is not none else 0 }}</td>
+                <td data-label="Siden sidst">
                     {% if r[9] > 0 %}
                         <span class="change up">▲ {{ r[9] }}</span>
                     {% elif r[9] < 0 %}

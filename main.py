@@ -2556,7 +2556,7 @@ def delete_round(round_id):
 
 @app.get("/stats")
 def stats():
-    sort = request.args.get("sort", "wins")
+    sort = request.args.get("sort", "total_points")
     direction = request.args.get("direction", "desc")
     year_raw = (request.args.get("year") or "").strip()
 
@@ -2573,8 +2573,13 @@ def stats():
 
     allowed_directions = {"asc", "desc"}
 
-    order_by = allowed_sorts.get(sort, "wins")
-    order_direction = direction if direction in allowed_directions else "desc"
+    if sort not in allowed_sorts:
+        sort = "total_points"
+    if direction not in allowed_directions:
+        direction = "desc"
+
+    order_by = allowed_sorts[sort]
+    order_direction = direction
 
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
