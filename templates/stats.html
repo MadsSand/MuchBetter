@@ -32,7 +32,10 @@
 
 <div class="card">
     <h2>Sæson {{ selected_year }}</h2>
-    <div class="muted leaderboard-sort-help">Aktive spillere i valgt sæson. Klik på ▲ eller ▼ ved en kolonne for at sortere.</div>
+    <div class="muted leaderboard-sort-help">
+        Aktive spillere i valgt sæson.
+        <span class="leaderboard-sort-help__desktop">Klik på ▲ eller ▼ ved en kolonne for at sortere.</span>
+    </div>
 
     {% if player_stats %}
     <div class="table-wrap" style="margin-top: 12px;">

@@ -22,15 +22,19 @@
                 {% set on_my_profile = my_player_base and (request.path == my_player_base or request.path.startswith(my_player_base ~ '/')) %}
                 {% set on_my_dashboard = request.path == '/me' or on_my_profile %}
                 <a href="/" class="{% if request.path == '/' %}active{% endif %}">
-                    <span class="topnav-icon">⌂</span>
+                    <span class="topnav-icon">🏡</span>
                     <span>Forside</span>
                 </a>
                 <a href="/me" class="{% if on_my_dashboard %}active{% endif %}">
-                    <span class="topnav-icon">👤</span>
+                    {% if my_player_id and current_nav_has_avatar %}
+                        <img class="topnav-avatar" src="/player/{{ my_player_id }}/avatar" alt="">
+                    {% else %}
+                        <span class="topnav-icon">🧢</span>
+                    {% endif %}
                     <span>Min side</span>
                 </a>
                 <a href="/players" class="{% if '/players' in request.path or (request.path.startswith('/player/') and not on_my_profile) %}active{% endif %}">
-                    <span class="topnav-icon">👥</span>
+                    <span class="topnav-icon">🏌️</span>
                     <span>Spillere</span>
                 </a>
             </nav>
@@ -51,7 +55,7 @@
             <aside id="sidebar" class="sidebar">
                 <nav class="sidebar-nav">
                     <a href="/stats" class="sidebar-link {% if '/stats' in request.path %}active{% endif %}">
-                        <span class="sidebar-icon">↗</span>
+                        <span class="sidebar-icon">🏆</span>
                         <span>Leaderboard</span>
                         {% if notif_leaderboard_count > 0 %}
                         <span class="notif-badge">{{ notif_leaderboard_count }}</span>
@@ -66,7 +70,7 @@
                     </a>
                     {% if session.logged_in and session.get('player_id') %}
                     <a href="{{ url_for('messages_inbox') }}" class="sidebar-link {% if '/beskeder' in request.path %}active{% endif %}">
-                        <span class="sidebar-icon">✉</span>
+                        <span class="sidebar-icon">💌</span>
                         <span>Beskeder</span>
                         {% if notif_messages_count > 0 %}
                         <span class="notif-badge">{{ notif_messages_count }}</span>
@@ -81,14 +85,14 @@
                         {% endif %}
                     </a>
                     <a href="/rounds" class="sidebar-link {% if '/rounds' in request.path or request.path.startswith('/round/') %}active{% endif %}">
-                        <span class="sidebar-icon">🏌</span>
+                        <span class="sidebar-icon">⛳</span>
                         <span>Runder</span>
                         {% if notif_rounds_count > 0 %}
                         <span class="notif-badge">{{ notif_rounds_count }}</span>
                         {% endif %}
                     </a>
                     <a href="{{ url_for('qa') }}" class="sidebar-link {% if '/qa' in request.path %}active{% endif %}">
-                        <span class="sidebar-icon">?</span>
+                        <span class="sidebar-icon">❓</span>
                         <span>QA</span>
                     </a>
                 </nav>

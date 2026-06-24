@@ -886,12 +886,26 @@ def inject_layout_context():
         "notif_leaderboard_count": 0,
         "notif_events_count": 0,
         "notif_messages_count": 0,
+        "current_nav_has_avatar": False,
     }
     with psycopg.connect(DB_URL) as conn:
         with conn.cursor() as cur:
             ctx["sidebar_updates"] = fetch_sidebar_updates(cur)
             user_id = session.get("user_id")
             if user_id:
+                player_id = session.get("player_id")
+                if player_id:
+                    cur.execute(
+                        """
+                        select avatar_data is not null
+                        from players
+                        where id = %s
+                          and is_active = true;
+                        """,
+                        (player_id,),
+                    )
+                    row = cur.fetchone()
+                    ctx["current_nav_has_avatar"] = bool(row and row[0])
                 ensure_notification_row(cur, user_id)
                 latest = fetch_latest_markers(cur)
                 cur.execute(

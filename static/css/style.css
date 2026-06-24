@@ -1538,6 +1538,10 @@ canvas {
         font-size: 13px;
     }
 
+    .leaderboard-sort-help__desktop {
+        display: none;
+    }
+
     .stats-table:not(.course-stats-table) {
         display: block;
         width: 100%;
@@ -2032,8 +2036,30 @@ input[type="text"] {
 }
 
 .topnav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 9px;
+    background: rgba(127, 176, 105, 0.16);
     font-size: 15px;
     line-height: 1;
+}
+
+.topnav-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(127, 176, 105, 0.45);
+    background: var(--surface-2);
+    flex: 0 0 28px;
+}
+
+.topnav a.active .topnav-avatar,
+.topnav a:hover .topnav-avatar {
+    border-color: rgba(255, 255, 255, 0.7);
 }
 
 .topbar-actions {
@@ -2344,8 +2370,26 @@ input[type="text"] {
 }
 
 .sidebar-icon {
-    font-size: 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    background: rgba(127, 176, 105, 0.16);
+    font-size: 16px;
     line-height: 1;
+    flex: 0 0 28px;
+}
+
+.topnav a.active .topnav-icon,
+.sidebar-link.active .sidebar-icon {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+.topnav a:hover .topnav-icon,
+.sidebar-link:hover .sidebar-icon {
+    background: rgba(127, 176, 105, 0.24);
 }
 
 .online-card {
