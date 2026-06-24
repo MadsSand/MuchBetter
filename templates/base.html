@@ -33,15 +33,6 @@
                     <span class="topnav-icon">👥</span>
                     <span>Spillere</span>
                 </a>
-                {% if session.logged_in and session.get('player_id') %}
-                <a href="{{ url_for('messages_inbox') }}" class="topnav-messages {% if '/beskeder' in request.path %}active{% endif %}">
-                    <span class="topnav-icon">✉</span>
-                    <span>Beskeder</span>
-                    {% if notif_messages_count > 0 %}
-                    <span class="notif-badge topnav-badge">{{ notif_messages_count }}</span>
-                    {% endif %}
-                </a>
-                {% endif %}
             </nav>
 
             <div class="topbar-actions">
@@ -73,6 +64,15 @@
                         <span class="notif-badge">{{ notif_events_count }}</span>
                         {% endif %}
                     </a>
+                    {% if session.logged_in and session.get('player_id') %}
+                    <a href="{{ url_for('messages_inbox') }}" class="sidebar-link {% if '/beskeder' in request.path %}active{% endif %}">
+                        <span class="sidebar-icon">✉</span>
+                        <span>Beskeder</span>
+                        {% if notif_messages_count > 0 %}
+                        <span class="notif-badge">{{ notif_messages_count }}</span>
+                        {% endif %}
+                    </a>
+                    {% endif %}
                     <a href="/forum" class="sidebar-link {% if '/forum' in request.path %}active{% endif %}">
                         <span class="sidebar-icon">💬</span>
                         <span>Forum</span>
@@ -186,6 +186,8 @@
             const sidebar = document.querySelector(".sidebar");
             const topbar = document.querySelector(".topbar");
             const mobileTopbarMq = window.matchMedia("(max-width: 760px)");
+            let lastScrollY = window.scrollY || 0;
+            let ticking = false;
 
             function syncMobileTopbarOffset() {
                 if (!topbar) return;
@@ -210,9 +212,45 @@
                 mobileTopbarMq.addListener(syncMobileTopbarOffset);
             }
 
+            function showMobileTopbar() {
+                if (topbar) {
+                    topbar.classList.remove("topbar--hidden");
+                }
+            }
+
+            function syncTopbarVisibility() {
+                ticking = false;
+                if (!topbar || !mobileTopbarMq.matches) {
+                    showMobileTopbar();
+                    lastScrollY = window.scrollY || 0;
+                    return;
+                }
+
+                const currentY = Math.max(window.scrollY || 0, 0);
+                const menuOpen = sidebar && sidebar.classList.contains("open");
+                const scrolledDown = currentY > lastScrollY + 8;
+                const scrolledUp = currentY < lastScrollY - 8;
+                const pastTopbar = currentY > topbar.offsetHeight;
+
+                if (menuOpen || currentY <= 0 || scrolledUp) {
+                    showMobileTopbar();
+                } else if (scrolledDown && pastTopbar) {
+                    topbar.classList.add("topbar--hidden");
+                }
+
+                lastScrollY = currentY;
+            }
+
+            window.addEventListener("scroll", function () {
+                if (ticking) return;
+                ticking = true;
+                window.requestAnimationFrame(syncTopbarVisibility);
+            }, { passive: true });
+
             if (!toggle || !sidebar) return;
 
             toggle.addEventListener("click", function () {
+                showMobileTopbar();
                 const isOpen = sidebar.classList.toggle("open");
                 toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
             });

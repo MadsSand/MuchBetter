@@ -1533,6 +1533,155 @@ canvas {
     .avatar {
         margin: 0 auto;
     }
+
+    .leaderboard-sort-help {
+        font-size: 13px;
+    }
+
+    .stats-table:not(.course-stats-table) {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        background: transparent;
+        border-collapse: separate;
+        border-spacing: 0 10px;
+    }
+
+    .stats-table:not(.course-stats-table) tbody {
+        display: block;
+        width: 100%;
+    }
+
+    .stats-table:not(.course-stats-table) tr:first-child {
+        display: none;
+    }
+
+    .stats-table:not(.course-stats-table) tr {
+        display: grid;
+        grid-template-columns: auto minmax(72px, 1fr) auto auto;
+        align-items: center;
+        gap: 8px 10px;
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface-2);
+    }
+
+    .stats-table:not(.course-stats-table) td {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0;
+        border-bottom: 0;
+        white-space: normal;
+        font-size: 13px;
+    }
+
+    .stats-table:not(.course-stats-table) td[data-label]::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .stats-table:not(.course-stats-table) .leaderboard-pos {
+        order: 1;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        background: var(--green-soft);
+        color: var(--text);
+        font-weight: 800;
+    }
+
+    .stats-table:not(.course-stats-table) .leaderboard-pos::before {
+        content: "#";
+        color: var(--muted);
+        font-weight: 700;
+    }
+
+    .stats-table:not(.course-stats-table) .leaderboard-player-cell {
+        order: 2;
+        min-width: 0;
+    }
+
+    .stats-table:not(.course-stats-table) .players-list-name {
+        min-width: 0;
+        gap: 8px;
+    }
+
+    .stats-table:not(.course-stats-table) .leaderboard-player-cell .player-link {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .stats-table:not(.course-stats-table) .leaderboard-mobile-initials {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        height: 32px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    .stats-table:not(.course-stats-table) .leaderboard-total-cell {
+        order: 3;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        color: var(--text);
+        font-size: 22px;
+        font-weight: 900;
+        line-height: 1;
+    }
+
+    .stats-table:not(.course-stats-table) .leaderboard-total-cell::before {
+        font-size: 10px;
+    }
+
+    .stats-table:not(.course-stats-table) .leaderboard-avg-cell {
+        order: 4;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        font-weight: 800;
+    }
+
+    .stats-table:not(.course-stats-table) .leaderboard-avg-cell::before {
+        content: "Snit";
+        font-size: 10px;
+    }
+
+    .stats-table:not(.course-stats-table) td:not(.leaderboard-pos):not(.leaderboard-player-cell):not(.leaderboard-total-cell):not(.leaderboard-avg-cell) {
+        order: 5;
+        justify-content: space-between;
+        min-height: 30px;
+        padding: 6px 8px;
+        border-radius: 10px;
+        background: var(--surface);
+    }
+
+    .stats-table:not(.course-stats-table) td:not(.leaderboard-pos):not(.leaderboard-player-cell):not(.leaderboard-total-cell):not(.leaderboard-avg-cell) .change {
+        min-width: 0;
+        padding: 3px 7px;
+    }
 }
 
 @media (max-width: 520px) {
@@ -1620,6 +1769,10 @@ th.th-sortable {
 .sort-arrow.is-active {
     color: var(--text);
     font-weight: 800;
+}
+
+.leaderboard-mobile-initials {
+    display: none;
 }
 
 
@@ -1808,6 +1961,7 @@ input[type="text"] {
     border: 1px solid var(--border);
     border-radius: 14px;
     box-shadow: var(--shadow);
+    transition: transform 0.22s ease;
 }
 
 .topbar-left {
@@ -1946,19 +2100,6 @@ input[type="text"] {
     font-weight: 700;
     line-height: 20px;
     text-align: center;
-}
-
-.topnav-messages {
-    position: relative;
-}
-
-.topnav .notif-badge.topnav-badge {
-    margin-left: 6px;
-    min-width: 18px;
-    height: 18px;
-    line-height: 18px;
-    font-size: 11px;
-    padding: 0 5px;
 }
 
 .messages-header {
@@ -2540,6 +2681,10 @@ input[type="text"] {
         box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
     }
 
+    .topbar.topbar--hidden {
+        transform: translateY(-100%);
+    }
+
     .layout-shell {
         padding-top: var(--mobile-topbar-height, 4.5rem);
     }
@@ -2586,21 +2731,6 @@ input[type="text"] {
 
     .topnav-icon {
         font-size: 18px;
-    }
-
-    .topnav .notif-badge.topnav-badge {
-        margin-left: 0;
-        position: absolute;
-        top: 2px;
-        right: 2px;
-        min-width: 16px;
-        height: 16px;
-        line-height: 16px;
-        font-size: 10px;
-    }
-
-    .topnav-messages {
-        position: relative;
     }
 
     .top-action-link {
