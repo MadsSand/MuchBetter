@@ -2286,7 +2286,7 @@ def edit_round(round_id):
 
 
     return render_template(
-        "round_detail.html",
+        "edit_round.html",
         round_row=round_row,
         courses=courses,
         player_rows=player_rows,
